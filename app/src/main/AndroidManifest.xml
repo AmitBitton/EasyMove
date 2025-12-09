@@ -13,14 +13,20 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.EasyMove">
 
-        <!-- זאת האקטיביטי הראשית שלך -->
-        <activity android:name=".MainActivity"
+        <!-- 👇 עכשיו AuthActivity היא המסך הראשון שנפתח -->
+        <activity
+            android:name=".view.activities.AuthActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 👇 MainActivity בלי LAUNCHER, רק אקטיביטי רגילה -->
+        <activity
+            android:name=".view.activities.MainActivity"
+            android:exported="false" />
 
     </application>
 
