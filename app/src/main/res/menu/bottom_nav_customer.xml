@@ -1,24 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-
     <item
         android:id="@+id/nav_my_move"
-        android:title="המעבר שלי"
-        android:icon="@android:drawable/ic_menu_agenda" />
+        android:icon="@android:drawable/ic_menu_my_calendar"
+        android:title="המעבר שלי" />
 
     <item
-        android:id="@+id/nav_partner"
-        android:title="חיפוש שותף"
-        android:icon="@android:drawable/ic_menu_share" />
-
-    <item
-        android:id="@+id/nav_movers"
-        android:title="חיפוש הובלה"
-        android:icon="@android:drawable/ic_menu_directions" />
+        android:id="@+id/nav_search_move"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="חיפוש הובלה" />
 
     <item
         android:id="@+id/nav_chats"
-        android:title="צ׳אטים"
-        android:icon="@android:drawable/ic_dialog_email" />
-
+        android:icon="@android:drawable/sym_action_chat"
+        android:title="צ'אטים" />
 </menu>

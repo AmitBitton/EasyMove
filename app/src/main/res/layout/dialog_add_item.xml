@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:layoutDirection="rtl">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="הוספת פריט למעבר"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_gravity="center"
+            android:layout_marginBottom="16dp"/>
+
+        <EditText
+            android:id="@+id/editItemName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="שם הפריט (למשל: ארגז ספרים)"
+            android:layout_marginBottom="12dp"/>
+
+        <EditText
+            android:id="@+id/editItemDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="תיאור נוסף (אופציונלי)"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="חדר:"
+            android:layout_marginBottom="4dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerRoomType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginBottom="12dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="כמות:"
+                android:layout_marginEnd="8dp"/>
+
+            <EditText
+                android:id="@+id/editItemQuantity"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="1"
+                android:gravity="center"/>
+
+            <CheckBox
+                android:id="@+id/checkFragile"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="שביר ⚠️"
+                android:layout_marginStart="24dp"/>
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnAddImage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="הוסף תמונה"
+            android:drawableEnd="@android:drawable/ic_menu_camera"
+            android:backgroundTint="#FF9800"
+            android:layout_marginBottom="8dp"/>
+
+        <ImageView
+            android:id="@+id/imagePreview"
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/btnCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ביטול"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_marginEnd="16dp"/>
+
+            <Button
+                android:id="@+id/btnSaveItem"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="שמור פריט"
+                android:backgroundTint="#4CAF50"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
