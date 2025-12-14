@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">EasyMove</string>
-    <string name="google_maps_key">AIzaSyBMmFhRb7yY-gR5CkO4DMbz2JGaKZIRDGk</string>
     <string name="navigation_drawer_open">פתח תפריט</string>
     <string name="navigation_drawer_close">סגור תפריט</string>
 </resources>

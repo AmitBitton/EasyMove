@@ -29,6 +29,16 @@ public class UserProfile {
     private String defaultToAddress;    // Default destination address (where the move ends)
 
     // Coordinates for integration with Google Maps (optional but useful)
+    private String geohash;
+    private double lat;
+    private double lng;
+
+    private double distanceFromUser;
+
+    private int serviceRadiusKm = 30; // Default service radius is 30 kilometers
+
+
+
     private Double fromLat;             // Latitude for default origin
     private Double fromLng;             // Longitude for default origin
     private Double toLat;               // Latitude for default destination
@@ -93,6 +103,20 @@ public class UserProfile {
 
     /* -----------------------  Getters & setters  ----------------------- */
 
+    public String getGeohash() { return geohash; }
+    public void setGeohash(String geohash) { this.geohash = geohash; }
+
+    public double getLat() { return lat; }
+    public void setLat(double lat) { this.lat = lat; }
+
+    public double getLng() { return lng; }
+    public void setLng(double lng) { this.lng = lng; }
+
+    public double getDistanceFromUser() { return distanceFromUser; }
+    public void setDistanceFromUser(double distanceFromUser) { this.distanceFromUser = distanceFromUser; }
+
+    public int getServiceRadiusKm() { return serviceRadiusKm; }
+    public void setServiceRadiusKm(int serviceRadiusKm) { this.serviceRadiusKm = serviceRadiusKm; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
 

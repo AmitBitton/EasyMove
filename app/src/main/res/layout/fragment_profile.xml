@@ -81,9 +81,10 @@
             android:layout_marginBottom="12dp" />
 
         <TextView
+            android:id="@+id/label_from_address"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="כתובת מוצא (ברירת מחדל)" />
+            android:text="כתובת מוצא (ברירת מחדל ללקוח)" />
 
         <EditText
             android:id="@+id/edit_from_address"
@@ -94,9 +95,10 @@
             android:layout_marginBottom="12dp" />
 
         <TextView
+            android:id="@+id/label_to_address"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="כתובת יעד (ברירת מחדל)" />
+            android:text="כתובת יעד (ברירת מחדל ללקוח)" />
 
         <EditText
             android:id="@+id/edit_to_address"
@@ -128,34 +130,58 @@
             android:orientation="vertical"
             android:visibility="gone"
             android:layout_marginBottom="16dp"
-            android:background="#F9F9F9"
-            android:padding="12dp">
+            android:background="#F0F4C3"
+            android:padding="16dp">
 
             <TextView
-                android:text="אזורי שירות (חובה למוביל)"
+                android:text="הגדרת בסיס יציאה (למובילים)"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textStyle="bold"
-                android:textSize="16sp"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:text="כתובת בסיס נבחרת:"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+
+            <TextView
+                android:id="@+id/tvSelectedMoverAddress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="לא נבחרה כתובת"
+                android:padding="8dp"
+                android:background="#FFFFFF"
                 android:layout_marginBottom="8dp"/>
 
             <Button
-                android:id="@+id/btnSelectAreas"
-                android:layout_width="match_parent"
+                android:id="@+id/btnPickMoverLocation"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="בחר אזורי פעילות"
-                android:backgroundTint="#FF9800"
-                android:layout_marginBottom="8dp"/>
+                android:text="שנה מיקום בסיס"
+                android:backgroundTint="#4CAF50"
+                android:layout_marginBottom="16dp"/>
 
             <TextView
-                android:id="@+id/textSelectedAreas"
+                android:id="@+id/tvRadiusLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="רדיוס שירות: 30 ק״מ"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"/>
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderRadius"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="לא נבחרו אזורים"
-                android:textColor="#757575"
-                android:gravity="center"
-                android:layout_marginBottom="4dp"/>
+                android:valueFrom="10"
+                android:valueTo="200"
+                android:stepSize="10"
+                android:value="30"/>
+
         </LinearLayout>
+
         <Button
             android:id="@+id/button_save_profile"
             android:layout_width="match_parent"
@@ -180,5 +206,4 @@
             android:visibility="gone" />
 
     </LinearLayout>
-
 </androidx.core.widget.NestedScrollView>

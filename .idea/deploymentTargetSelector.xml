@@ -4,7 +4,7 @@
     <selectionStates>
       <SelectionState runConfigName="EasyMove">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-12-10T16:31:43.824341200Z">
+        <DropdownSelection timestamp="2025-12-14T07:38:50.026531300Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\david\.android\avd\Medium_Phone_2.avd" />

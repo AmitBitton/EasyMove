@@ -1,9 +1,11 @@
 package com.example.easymove.adapters;
 
+import android.graphics.Paint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -17,13 +19,17 @@ import java.util.List;
 public class MoversAdapter extends RecyclerView.Adapter<MoversAdapter.MoverViewHolder> {
 
     private List<UserProfile> movers = new ArrayList<>();
-    private final OnMoverClickListener listener;
+    private final OnMoverActionClickListener listener;
 
-    public interface OnMoverClickListener {
+    // הרחבנו את ה-Interface כדי לתמוך בכל הכפתורים
+    public interface OnMoverActionClickListener {
         void onChatClick(UserProfile mover);
+        void onDetailsClick(UserProfile mover);
+        void onReviewsClick(UserProfile mover);
+        void onReportClick(UserProfile mover);
     }
 
-    public MoversAdapter(OnMoverClickListener listener) {
+    public MoversAdapter(OnMoverActionClickListener listener) {
         this.listener = listener;
     }
 
@@ -45,16 +51,19 @@ public class MoversAdapter extends RecyclerView.Adapter<MoversAdapter.MoverViewH
 
         holder.tvName.setText(mover.getName());
         holder.tvAbout.setText(mover.getAbout() != null ? mover.getAbout() : "אין פירוט נוסף");
+        holder.btnReport.setPaintFlags(holder.btnReport.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
 
-        // הצגת רשימת אזורים
-        if (mover.getServiceAreas() != null && !mover.getServiceAreas().isEmpty()) {
-            holder.tvAreas.setText("אזורים: " + String.join(", ", mover.getServiceAreas()));
+        // הצגת מרחק (החלק החשוב!)
+        double distance = mover.getDistanceFromUser();
+        if (distance > 0) {
+            holder.tvDistance.setText(String.format("מרחק: %.1f ק\"מ", distance / 1000));
         } else {
-            holder.tvAreas.setText("אזורים: לא צוין");
+            holder.tvDistance.setText("מרחק לא ידוע");
         }
 
-        // הצגת דירוג (אם יש)
-        holder.tvRating.setText(mover.getRating() > 0 ? String.format("%.1f (%d)", mover.getRating(), mover.getRatingCount()) : "חדש!");
+        // הצגת דירוג
+        holder.tvRating.setText(mover.getRating() > 0 ? String.format("%.1f", mover.getRating()) : "-");
+        holder.btnReviews.setText(String.format("(%d ביקורות) לחץ לצפייה", mover.getRatingCount()));
 
         // תמונה
         if (mover.getProfileImageUrl() != null && !mover.getProfileImageUrl().isEmpty()) {
@@ -63,7 +72,11 @@ public class MoversAdapter extends RecyclerView.Adapter<MoversAdapter.MoverViewH
             holder.ivProfile.setImageResource(android.R.drawable.ic_menu_gallery);
         }
 
+        // --- חיבור כפתורים ---
         holder.btnChat.setOnClickListener(v -> listener.onChatClick(mover));
+        holder.btnDetails.setOnClickListener(v -> listener.onDetailsClick(mover));
+        holder.btnReviews.setOnClickListener(v -> listener.onReviewsClick(mover));
+        holder.btnReport.setOnClickListener(v -> listener.onReportClick(mover));
     }
 
     @Override
@@ -73,17 +86,22 @@ public class MoversAdapter extends RecyclerView.Adapter<MoversAdapter.MoverViewH
 
     static class MoverViewHolder extends RecyclerView.ViewHolder {
         ImageView ivProfile;
-        TextView tvName, tvAreas, tvRating, tvAbout;
-        Button btnChat;
+        TextView tvName, tvDistance, tvRating, tvAbout, btnReviews;
+        Button btnChat, btnDetails;
+        Button btnReport;
 
         public MoverViewHolder(@NonNull View itemView) {
             super(itemView);
             ivProfile = itemView.findViewById(R.id.imgMoverProfile);
             tvName = itemView.findViewById(R.id.tvMoverName);
-            tvAreas = itemView.findViewById(R.id.tvServiceAreas);
+            tvDistance = itemView.findViewById(R.id.tvDistance);
             tvRating = itemView.findViewById(R.id.tvRating);
-            tvAbout = itemView.findViewById(R.id.tvAbout);
+            btnReviews = itemView.findViewById(R.id.btnReviews); // TextView לחיץ
+            tvAbout = itemView.findViewById(R.id.tvAboutPreview);
+
             btnChat = itemView.findViewById(R.id.btnChatWithMover);
+            btnDetails = itemView.findViewById(R.id.btnMoverDetails);
+            btnReport = itemView.findViewById(R.id.btnReportMover);
         }
     }
 }

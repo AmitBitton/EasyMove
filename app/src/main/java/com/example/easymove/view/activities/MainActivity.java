@@ -3,6 +3,7 @@ package com.example.easymove.view.activities;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.MenuItem;
+import android.view.View; // הוספתי לייבוא
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -14,13 +15,10 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 
 import com.example.easymove.R;
-import com.example.easymove.model.UserProfile;
-import com.example.easymove.model.UserSession; // וודא שזה קיים
+import com.example.easymove.model.UserSession;
 import com.example.easymove.view.fragments.MyDeliveriesFragment;
 import com.example.easymove.view.fragments.MyMoveFragment;
 import com.example.easymove.view.fragments.ProfileFragment;
-// import com.example.easymove.view.fragments.SearchMoveFragment; // נצטרך ליצור
-// import com.example.easymove.view.fragments.ChatsFragment; // נצטרך ליצור
 import com.example.easymove.view.fragments.SearchMoverFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationView;
@@ -46,30 +44,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // אתחול Firebase
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
-        // חיבור לרכיבים ב-XML
         toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar); // הגדרת ה-Toolbar כסרגל הראשי
+        setSupportActionBar(toolbar);
 
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
         bottomNav = findViewById(R.id.bottom_navigation);
 
-        // הגדרת כפתור ההמבורגר
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawerLayout, toolbar,
                 R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
 
-        // מאזינים
         navigationView.setNavigationItemSelectedListener(this);
         bottomNav.setOnItemSelectedListener(this::onBottomNavItemSelected);
 
-        // בדיקת משתמש
         FirebaseUser currentUser = auth.getCurrentUser();
         if (currentUser == null) {
             startAuth();
@@ -79,7 +72,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         checkUserProfile(currentUser.getUid());
     }
 
-    // --- טיפול בתפריט הצד (Drawer) ---
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
@@ -94,28 +86,30 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return true;
     }
 
-    // --- טיפול בתפריט התחתון (Bottom Nav) ---
     private boolean onBottomNavItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
         Fragment fragment = null;
 
-        // לוגיקה ללקוח (לפי הבקשה שלך: 3 כפתורים)
+        // לוגיקה ללקוח
         if ("customer".equals(userType)) {
             if (id == R.id.nav_my_move) {
                 fragment = new MyMoveFragment();
+                getSupportActionBar().setTitle("המעבר שלי");
             } else if (id == R.id.nav_search_move) {
                 fragment = new SearchMoverFragment();
+                getSupportActionBar().setTitle("חיפוש מוביל");
             } else if (id == R.id.nav_chats) {
-                // TODO: fragment = new ChatsFragment();
+                // fragment = new ChatsFragment();
                 Toast.makeText(this, "כאן יהיו הצ'אטים", Toast.LENGTH_SHORT).show();
             }
         }
         // לוגיקה למוביל
         else if ("mover".equals(userType)) {
-            if (id == R.id.nav_my_deliveries) { // צריך לוודא שזה קיים ב-XML של המוביל
+            if (id == R.id.nav_my_deliveries) {
                 fragment = new MyDeliveriesFragment();
+                getSupportActionBar().setTitle("הובלות");
             }
-            // ... שאר הכפתורים למוביל
+            // ... להוסיף כאן עוד כפתורים למוביל אם יש
         }
 
         if (fragment != null) {
@@ -126,7 +120,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void checkUserProfile(String uid) {
-        // טעינה דרך UserSession (מומלץ) או ישירות
         UserSession.getInstance().ensureStarted().addOnSuccessListener(profile -> {
             if (profile != null) {
                 userType = profile.getUserType();
@@ -134,7 +127,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                 setupBottomNav(userType);
 
-                // מסך הבית
+                // ניווט ברירת מחדל במסך הבית
                 if ("customer".equals(userType)) {
                     replaceFragment(new MyMoveFragment());
                     getSupportActionBar().setTitle("המעבר שלי");
@@ -145,17 +138,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }).addOnFailureListener(e -> {
             Toast.makeText(this, "שגיאה בטעינת פרופיל", Toast.LENGTH_SHORT).show();
-            logout(); // אם נכשל, עדיף לצאת
+            logout();
         });
     }
 
     private void setupBottomNav(String userType) {
-        bottomNav.getMenu().clear();
+        bottomNav.getMenu().clear(); // ניקוי הקיים
+
         if ("customer".equals(userType)) {
             bottomNav.inflateMenu(R.menu.bottom_nav_customer);
         } else {
             bottomNav.inflateMenu(R.menu.bottom_nav_mover);
         }
+
+        // --- התיקון: הצגת הסרגל רק עכשיו ---
+        bottomNav.setVisibility(View.VISIBLE);
+        // -----------------------------------
     }
 
     private void replaceFragment(Fragment fragment) {
@@ -167,7 +165,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void logout() {
         auth.signOut();
-        UserSession.getInstance().stop(); // ניקוי ה-Session
+        UserSession.getInstance().stop();
         startAuth();
     }
 
@@ -176,7 +174,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         finish();
     }
 
-    // סגירת התפריט בלחיצה על 'חזור' אם הוא פתוח
     @Override
     public void onBackPressed() {
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {

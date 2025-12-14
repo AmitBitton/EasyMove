@@ -1,6 +1,7 @@
 package com.example.easymove.view.fragments;
 
-import android.app.AlertDialog;
+import android.app.Activity;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -14,7 +15,6 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -23,19 +23,29 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.bumptech.glide.Glide;
+import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
 import com.example.easymove.model.UserProfile;
 import com.example.easymove.viewmodel.UserViewModel;
+import com.firebase.geofire.GeoFireUtils;
+import com.firebase.geofire.GeoLocation;
+import com.google.android.libraries.places.api.Places;
+import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.widget.Autocomplete;
+import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
+import com.google.android.material.slider.Slider;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public class ProfileFragment extends Fragment {
 
     private UserViewModel viewModel;
+    private UserProfile currentUserProfile; // אובייקט עזר לשמירת השינויים לפני השמירה בשרת
 
-    // רכיבי UI קיימים
+    private TextView labelFromAddress, labelToAddress;
+
+    // רכיבי UI כלליים
     private ImageView imageProfile;
     private Button buttonChangeImage;
     private EditText editName;
@@ -50,16 +60,24 @@ public class ProfileFragment extends Fragment {
 
     // --- חדש: רכיבים למוביל בלבד ---
     private LinearLayout layoutMoverFields;
-    private Button btnSelectAreas;
-    private TextView textSelectedAreas;
-
-    // רשימת האזורים האפשריים (חייב להיות תואם לחיפוש!)
-    private final String[] availableAreas = {"מרכז", "השרון", "צפון", "דרום", "ירושלים", "שפלה", "יהודה ושומרון"};
-    private boolean[] checkedAreas; // שומר את הבחירות בדיאלוג
-    private List<String> selectedAreasList = new ArrayList<>(); // הרשימה הסופית לשמירה
+    private TextView tvSelectedMoverAddress;
+    private Button btnPickMoverLocation;
+    private TextView tvRadiusLabel;
+    private Slider sliderRadius;
 
     private Uri selectedImageUri = null;
     private ActivityResultLauncher<String> pickImageLauncher;
+
+    // משגר לבחירת כתובת (Google Places)
+    private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    Place place = Autocomplete.getPlaceFromIntent(result.getData());
+                    updateMoverLocation(place);
+                }
+            }
+    );
 
     public ProfileFragment() {
         // Required empty public constructor
@@ -76,31 +94,15 @@ public class ProfileFragment extends Fragment {
 
         viewModel = new ViewModelProvider(this).get(UserViewModel.class);
 
-        // אתחול מערך הבחירות
-        checkedAreas = new boolean[availableAreas.length];
+        // אתחול Google Places (אם לא אותחל)
+        if (!Places.isInitialized()) {
+            Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
+        }
 
         initViews(view);
-
-        // משגר תמונה
-        pickImageLauncher = registerForActivityResult(
-                new ActivityResultContracts.GetContent(),
-                uri -> {
-                    if (uri != null) {
-                        selectedImageUri = uri;
-                        imageProfile.setImageURI(uri);
-                        viewModel.uploadProfileImage(uri);
-                    }
-                }
-        );
-
-        // מאזינים
-        buttonChangeImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-        buttonSave.setOnClickListener(v -> saveProfileFromUi());
-
-        // --- חדש: לחיצה על בחירת אזורים ---
-        btnSelectAreas.setOnClickListener(v -> showAreaSelectionDialog());
-
+        setupListeners();
         observeViewModel();
+
         viewModel.loadMyProfile();
     }
 
@@ -116,16 +118,50 @@ public class ProfileFragment extends Fragment {
         buttonSave = view.findViewById(R.id.button_save_profile);
         textError = view.findViewById(R.id.text_error);
         progressBar = view.findViewById(R.id.progress_loading);
+        labelFromAddress = view.findViewById(R.id.label_from_address);
+        labelToAddress = view.findViewById(R.id.label_to_address);
 
         // רכיבי מוביל
         layoutMoverFields = view.findViewById(R.id.layoutMoverFields);
-        btnSelectAreas = view.findViewById(R.id.btnSelectAreas);
-        textSelectedAreas = view.findViewById(R.id.textSelectedAreas);
+        tvSelectedMoverAddress = view.findViewById(R.id.tvSelectedMoverAddress);
+        btnPickMoverLocation = view.findViewById(R.id.btnPickMoverLocation);
+        tvRadiusLabel = view.findViewById(R.id.tvRadiusLabel);
+        sliderRadius = view.findViewById(R.id.sliderRadius);
+    }
+
+    private void setupListeners() {
+        // משגר תמונה
+        pickImageLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) {
+                        selectedImageUri = uri;
+                        imageProfile.setImageURI(uri);
+                        viewModel.uploadProfileImage(uri);
+                    }
+                }
+        );
+
+        buttonChangeImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+        buttonSave.setOnClickListener(v -> saveProfileFromUi());
+
+        // כפתור בחירת מיקום למוביל
+        btnPickMoverLocation.setOnClickListener(v -> openPlacePicker());
+
+        // האזנה לשינוי ברדיוס
+        sliderRadius.addOnChangeListener((slider, value, fromUser) -> {
+            int radius = (int) value;
+            tvRadiusLabel.setText("רדיוס שירות: " + radius + " ק״מ");
+            if (currentUserProfile != null) {
+                currentUserProfile.setServiceRadiusKm(radius);
+            }
+        });
     }
 
     private void observeViewModel() {
         viewModel.getMyProfileLiveData().observe(getViewLifecycleOwner(), profile -> {
             if (profile != null) {
+                this.currentUserProfile = profile; // שמירת רפרנס מקומי
                 fillUiFromProfile(profile);
             }
         });
@@ -144,12 +180,9 @@ public class ProfileFragment extends Fragment {
         );
 
         viewModel.getUploadedImageUrlLiveData().observe(getViewLifecycleOwner(), url -> {
-            if (url != null) {
-                UserProfile current = viewModel.getMyProfileLiveData().getValue();
-                if (current != null) {
-                    current.setProfileImageUrl(url);
-                    viewModel.saveMyProfile(current);
-                }
+            if (url != null && currentUserProfile != null) {
+                currentUserProfile.setProfileImageUrl(url);
+                viewModel.saveMyProfile(currentUserProfile);
             }
         });
     }
@@ -161,78 +194,90 @@ public class ProfileFragment extends Fragment {
         String type = profile.getUserType();
         textUserType.setText(type != null ? type : "לא מוגדר");
 
-        if (profile.getDefaultFromAddress() != null) editFromAddress.setText(profile.getDefaultFromAddress());
-        if (profile.getDefaultToAddress() != null) editToAddress.setText(profile.getDefaultToAddress());
         if (profile.getAbout() != null) editAbout.setText(profile.getAbout());
 
         if (profile.getProfileImageUrl() != null && !profile.getProfileImageUrl().isEmpty()) {
             Glide.with(this).load(profile.getProfileImageUrl()).placeholder(R.drawable.placeholder_image).into(imageProfile);
         }
 
-        // --- לוגיקה ייחודית למוביל ---
         if ("mover".equals(type)) {
+            // --- מצב מוביל ---
             layoutMoverFields.setVisibility(View.VISIBLE);
 
-            // טעינת אזורים שכבר שמורים ב-Firebase
-            if (profile.getServiceAreas() != null) {
-                selectedAreasList = new ArrayList<>(profile.getServiceAreas());
-                updateSelectedAreasText();
+            // הסתרת שדות של לקוח
+            labelFromAddress.setVisibility(View.GONE);
+            editFromAddress.setVisibility(View.GONE);
+            labelToAddress.setVisibility(View.GONE);
+            editToAddress.setVisibility(View.GONE);
 
-                // סנכרון הצ'קבוקסים לדיאלוג
-                for (int i = 0; i < availableAreas.length; i++) {
-                    checkedAreas[i] = selectedAreasList.contains(availableAreas[i]);
-                }
-            }
-        } else {
-            layoutMoverFields.setVisibility(View.GONE);
-        }
-    }
-
-    // --- חדש: דיאלוג בחירת אזורים ---
-    private void showAreaSelectionDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle("בחר אזורי שירות");
-        builder.setMultiChoiceItems(availableAreas, checkedAreas, (dialog, which, isChecked) -> {
-            if (isChecked) {
-                // הוספה לרשימה אם לא קיים
-                if (!selectedAreasList.contains(availableAreas[which])) {
-                    selectedAreasList.add(availableAreas[which]);
-                }
+            // מילוי שדות מוביל
+            if (profile.getDefaultFromAddress() != null && !profile.getDefaultFromAddress().isEmpty()) {
+                tvSelectedMoverAddress.setText(profile.getDefaultFromAddress());
             } else {
-                // הסרה מהרשימה
-                selectedAreasList.remove(availableAreas[which]);
+                tvSelectedMoverAddress.setText("טרם הוגדר בסיס יציאה");
             }
-        });
+            int radius = profile.getServiceRadiusKm() > 0 ? profile.getServiceRadiusKm() : 30;
+            sliderRadius.setValue(radius);
+            tvRadiusLabel.setText("רדיוס שירות: " + radius + " ק״מ");
 
-        builder.setPositiveButton("אישור", (dialog, which) -> updateSelectedAreasText());
-        builder.setNegativeButton("ביטול", null);
-        builder.show();
+        } else {
+            // --- מצב לקוח ---
+            layoutMoverFields.setVisibility(View.GONE);
+
+            // הצגת שדות של לקוח
+            labelFromAddress.setVisibility(View.VISIBLE);
+            editFromAddress.setVisibility(View.VISIBLE);
+            labelToAddress.setVisibility(View.VISIBLE);
+            editToAddress.setVisibility(View.VISIBLE);
+
+            if (profile.getDefaultFromAddress() != null) editFromAddress.setText(profile.getDefaultFromAddress());
+            if (profile.getDefaultToAddress() != null) editToAddress.setText(profile.getDefaultToAddress());
+        }
     }
 
-    private void updateSelectedAreasText() {
-        if (selectedAreasList.isEmpty()) {
-            textSelectedAreas.setText("לא נבחרו אזורים");
-        } else {
-            textSelectedAreas.setText(String.join(", ", selectedAreasList));
-        }
+    private void openPlacePicker() {
+        // בחירת מיקום עם Lat/Lng וכתובת
+        List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS);
+        Intent intent = new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields)
+                .setCountry("IL") // אופציונלי: הגבלה לישראל
+                .build(requireContext());
+        placePickerLauncher.launch(intent);
+    }
+
+    private void updateMoverLocation(Place place) {
+        if (place.getLatLng() == null || currentUserProfile == null) return;
+
+        double lat = place.getLatLng().latitude;
+        double lng = place.getLatLng().longitude;
+        String address = place.getAddress();
+
+        // עדכון UI
+        tvSelectedMoverAddress.setText(address);
+        editFromAddress.setText(address); // מעדכן גם את ה-EditText הראשי שיהיה נוח
+
+        // 1. חישוב GeoHash
+        String hash = GeoFireUtils.getGeoHashForLocation(new GeoLocation(lat, lng));
+
+        // 2. עדכון המודל המקומי
+        currentUserProfile.setLat(lat);
+        currentUserProfile.setLng(lng);
+        currentUserProfile.setGeohash(hash);
+        currentUserProfile.setDefaultFromAddress(address);
     }
 
     private void saveProfileFromUi() {
-        UserProfile current = viewModel.getMyProfileLiveData().getValue();
-        if (current == null) current = new UserProfile();
+        if (currentUserProfile == null) currentUserProfile = new UserProfile();
 
-        current.setName(editName.getText().toString().trim());
-        current.setPhone(editPhone.getText().toString().trim());
-        current.setDefaultFromAddress(editFromAddress.getText().toString().trim());
-        current.setDefaultToAddress(editToAddress.getText().toString().trim());
-        current.setAbout(editAbout.getText().toString().trim());
+        currentUserProfile.setName(editName.getText().toString().trim());
+        currentUserProfile.setPhone(editPhone.getText().toString().trim());
+        currentUserProfile.setDefaultFromAddress(editFromAddress.getText().toString().trim());
+        currentUserProfile.setDefaultToAddress(editToAddress.getText().toString().trim());
+        currentUserProfile.setAbout(editAbout.getText().toString().trim());
 
-        // שמירת אזורים למוביל
-        if ("mover".equals(current.getUserType())) {
-            current.setServiceAreas(selectedAreasList);
-        }
+        // הרדיוס כבר מתעדכן בזמן אמת דרך ה-Listener של הסליידר,
+        // המיקום מתעדכן בפונקציה updateMoverLocation.
 
-        viewModel.saveMyProfile(current);
+        viewModel.saveMyProfile(currentUserProfile);
         Toast.makeText(getContext(), "הפרופיל עודכן בהצלחה", Toast.LENGTH_SHORT).show();
     }
 }

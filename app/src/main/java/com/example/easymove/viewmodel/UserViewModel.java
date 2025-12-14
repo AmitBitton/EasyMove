@@ -9,24 +9,22 @@ import androidx.lifecycle.ViewModel;
 
 import com.example.easymove.model.UserProfile;
 import com.example.easymove.model.repository.UserRepository;
+import com.firebase.geofire.GeoFireUtils;
+import com.firebase.geofire.GeoLocation;
+import com.firebase.geofire.GeoQueryBounds;
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
  * UserViewModel
- * -------------
- * ViewModel responsible for:
- *  - Loading & saving the current user's profile
- *  - Uploading profile image
- *  - Loading movers for the "search move" flow
- *  - Loading customers for "shared move" (future / optional)
- *
- * UI (Fragments / Activities) should observe the LiveData exposed here.
- * This ViewModel talks to UserRepository, which talks to Firebase.
  */
 public class UserViewModel extends ViewModel {
 
@@ -36,54 +34,27 @@ public class UserViewModel extends ViewModel {
 
     /* -------------------- LiveData fields -------------------- */
 
-    // פרופיל של המשתמש המחובר
     private final MutableLiveData<UserProfile> myProfile = new MutableLiveData<>();
-
-    // רשימת מובילים (למסך חיפוש הובלה)
     private final MutableLiveData<List<UserProfile>> moversList = new MutableLiveData<>(new ArrayList<>());
-
-    // רשימת לקוחות (למסך חיפוש שותף – עתידי)
     private final MutableLiveData<List<UserProfile>> customersList = new MutableLiveData<>(new ArrayList<>());
-
-    // URL של תמונת פרופיל שהועלתה
     private final MutableLiveData<String> uploadedImageUrl = new MutableLiveData<>();
-
-    // טעינה / שגיאה כלליים
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
 
+    // קבוע לרדיוס חיפוש - 50 קילומטרים
+    private static final double SEARCH_RADIUS_M = 50 * 1000;
+
     /* -------------------- Getters for LiveData -------------------- */
 
-    public LiveData<UserProfile> getMyProfileLiveData() {
-        return myProfile;
-    }
-
-    public LiveData<List<UserProfile>> getMoversListLiveData() {
-        return moversList;
-    }
-
-    public LiveData<List<UserProfile>> getCustomersListLiveData() {
-        return customersList;
-    }
-
-    public LiveData<String> getUploadedImageUrlLiveData() {
-        return uploadedImageUrl;
-    }
-
-    public LiveData<Boolean> getIsLoadingLiveData() {
-        return isLoading;
-    }
-
-    public LiveData<String> getErrorMessageLiveData() {
-        return errorMessage;
-    }
+    public LiveData<UserProfile> getMyProfileLiveData() { return myProfile; }
+    public LiveData<List<UserProfile>> getMoversListLiveData() { return moversList; }
+    public LiveData<List<UserProfile>> getCustomersListLiveData() { return customersList; }
+    public LiveData<String> getUploadedImageUrlLiveData() { return uploadedImageUrl; }
+    public LiveData<Boolean> getIsLoadingLiveData() { return isLoading; }
+    public LiveData<String> getErrorMessageLiveData() { return errorMessage; }
 
     /* -------------------- Profile: load & save -------------------- */
 
-    /**
-     * Loads the current user's profile from Firestore and posts it to myProfile LiveData.
-     * Used by both customer & mover "Profile" screens.
-     */
     public void loadMyProfile() {
         isLoading.setValue(true);
         errorMessage.setValue(null);
@@ -100,10 +71,6 @@ public class UserViewModel extends ViewModel {
                 });
     }
 
-    /**
-     * Saves the given UserProfile as the current user's profile.
-     * After success, myProfile LiveData is updated.
-     */
     public void saveMyProfile(UserProfile profile) {
         if (profile == null) {
             errorMessage.setValue("Profile is null");
@@ -127,10 +94,6 @@ public class UserViewModel extends ViewModel {
 
     /* -------------------- Profile image upload -------------------- */
 
-    /**
-     * Uploads a profile image and updates uploadedImageUrl LiveData with the download URL.
-     * You can then update the profile's profileImageUrl field and call saveMyProfile().
-     */
     public void uploadProfileImage(Uri imageUri) {
         if (imageUri == null) {
             errorMessage.setValue("No image selected");
@@ -155,50 +118,101 @@ public class UserViewModel extends ViewModel {
     /* -------------------- Movers: search for move -------------------- */
 
     /**
-     * Loads movers that work in at least one of the given service areas.
-     * Connected to the "Search Move" screen (customer).
+     * פונקציית החיפוש החדשה והחכמה - מבוססת מיקום גיאוגרפי
      */
-    public void loadMoversByAreas(List<String> areas) {
+    public void searchMoversByLocation(LatLng centerLatLng) {
+        if (centerLatLng == null) {
+            errorMessage.setValue("מיקום לא תקין");
+            return;
+        }
+
         isLoading.setValue(true);
         errorMessage.setValue(null);
 
+        // 1. הגדרת מרכז החיפוש והרדיוס
+        final GeoLocation center = new GeoLocation(centerLatLng.latitude, centerLatLng.longitude);
+        List<GeoQueryBounds> bounds = GeoFireUtils.getGeoHashQueryBounds(center, SEARCH_RADIUS_M);
+
+        final List<Task<QuerySnapshot>> tasks = new ArrayList<>();
+
+        // 2. יצירת רשימת משימות (Tasks) מול ה-Repository
+        for (GeoQueryBounds b : bounds) {
+            tasks.add(userRepository.getMoversByGeoHash(b.startHash, b.endHash));
+        }
+
+        // 3. הרצת כל השאילתות במקביל
+        Tasks.whenAllComplete(tasks)
+                .addOnCompleteListener(t -> {
+                    List<UserProfile> matchingMovers = new ArrayList<>();
+
+                    for (Task<QuerySnapshot> task : tasks) {
+                        QuerySnapshot snap = task.getResult();
+                        if (snap != null) {
+                            for (DocumentSnapshot doc : snap.getDocuments()) {
+                                UserProfile mover = doc.toObject(UserProfile.class);
+
+                                // בדיקה שהמוביל קיים ויש לו מיקום תקין
+                                if (mover != null && mover.getLat() != 0 && mover.getLng() != 0) {
+
+                                    // חישוב מרחק מדויק
+                                    GeoLocation docLocation = new GeoLocation(mover.getLat(), mover.getLng());
+                                    double distanceInMeters = GeoFireUtils.getDistanceBetween(docLocation, center);
+
+                                    if (distanceInMeters <= SEARCH_RADIUS_M) {
+                                        mover.setDistanceFromUser(distanceInMeters);
+                                        mover.setUserId(doc.getId());
+                                        matchingMovers.add(mover);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. מיון לפי מרחק
+                    Collections.sort(matchingMovers, Comparator.comparingDouble(UserProfile::getDistanceFromUser));
+
+                    // 5. עדכון ה-UI
+                    isLoading.setValue(false);
+                    moversList.setValue(matchingMovers);
+                })
+                .addOnFailureListener(e -> {
+                    isLoading.setValue(false);
+                    errorMessage.setValue("חיפוש נכשל: " + e.getMessage());
+                });
+    }
+
+
+    // --- שיטות ישנות (ניתן להשאיר לתמיכה לאחור או למחוק אם אין צורך) ---
+
+    public void loadMoversByAreas(List<String> areas) {
+        isLoading.setValue(true);
+        errorMessage.setValue(null);
         userRepository.getMoversByAreas(areas)
                 .addOnSuccessListener(this::mapMoversSnapshotToProfiles)
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    Log.e(TAG, "loadMoversByAreas: failed", e);
                     errorMessage.setValue(e.getMessage());
                 });
     }
 
-    /**
-     * Convenience method for a single area – can be used when you map the route to a single region.
-     */
     public void loadMoversByArea(String area) {
         isLoading.setValue(true);
         errorMessage.setValue(null);
-
         userRepository.getMoversByArea(area)
                 .addOnSuccessListener(this::mapMoversSnapshotToProfiles)
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    Log.e(TAG, "loadMoversByArea: failed", e);
                     errorMessage.setValue(e.getMessage());
                 });
     }
 
-    /**
-     * Loads all movers (fallback or initial state).
-     */
     public void loadAllMovers() {
         isLoading.setValue(true);
         errorMessage.setValue(null);
-
         userRepository.getAllMovers()
                 .addOnSuccessListener(this::mapMoversSnapshotToProfiles)
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    Log.e(TAG, "loadAllMovers: failed", e);
                     errorMessage.setValue(e.getMessage());
                 });
     }
@@ -206,7 +220,6 @@ public class UserViewModel extends ViewModel {
     private void mapMoversSnapshotToProfiles(QuerySnapshot snapshot) {
         isLoading.setValue(false);
         List<UserProfile> list = new ArrayList<>();
-
         if (snapshot != null) {
             for (DocumentSnapshot doc : snapshot.getDocuments()) {
                 UserProfile profile = doc.toObject(UserProfile.class);
@@ -221,34 +234,24 @@ public class UserViewModel extends ViewModel {
 
     /* -------------------- Customers: shared move (future) -------------------- */
 
-    /**
-     * Loads all customers (for future "Find partner" / shared move feature).
-     */
     public void loadAllCustomers() {
         isLoading.setValue(true);
         errorMessage.setValue(null);
-
         userRepository.getAllCustomers()
                 .addOnSuccessListener(this::mapCustomersSnapshotToProfiles)
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    Log.e(TAG, "loadAllCustomers: failed", e);
                     errorMessage.setValue(e.getMessage());
                 });
     }
 
-    /**
-     * Loads all customers (ViewModel can filter out current user if needed).
-     */
     public void loadAllCustomersExceptMe() {
         isLoading.setValue(true);
         errorMessage.setValue(null);
-
         userRepository.getAllCustomersExceptMe()
                 .addOnSuccessListener(this::mapCustomersSnapshotToProfiles)
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    Log.e(TAG, "loadAllCustomersExceptMe: failed", e);
                     errorMessage.setValue(e.getMessage());
                 });
     }
@@ -256,7 +259,6 @@ public class UserViewModel extends ViewModel {
     private void mapCustomersSnapshotToProfiles(QuerySnapshot snapshot) {
         isLoading.setValue(false);
         List<UserProfile> list = new ArrayList<>();
-
         if (snapshot != null) {
             for (DocumentSnapshot doc : snapshot.getDocuments()) {
                 UserProfile profile = doc.toObject(UserProfile.class);
