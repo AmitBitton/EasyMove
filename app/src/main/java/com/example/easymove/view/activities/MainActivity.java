@@ -3,7 +3,7 @@ package com.example.easymove.view.activities;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.MenuItem;
-import android.view.View; // הוספתי לייבוא
+import android.view.View;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -99,8 +99,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 fragment = new SearchMoverFragment();
                 getSupportActionBar().setTitle("חיפוש מוביל");
             } else if (id == R.id.nav_chats) {
-                // fragment = new ChatsFragment();
-                Toast.makeText(this, "כאן יהיו הצ'אטים", Toast.LENGTH_SHORT).show();
+                fragment = new com.example.easymove.view.fragments.ChatsFragment();
+                getSupportActionBar().setTitle("הצ'אטים שלי");
             }
         }
         // לוגיקה למוביל
@@ -109,7 +109,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 fragment = new MyDeliveriesFragment();
                 getSupportActionBar().setTitle("הובלות");
             }
-            // ... להוסיף כאן עוד כפתורים למוביל אם יש
+            else if (id == R.id.nav_chats) { // וודא שזה ה-ID בקובץ menu של המוביל
+                fragment = new com.example.easymove.view.fragments.ChatsFragment();
+                getSupportActionBar().setTitle("הצ'אטים שלי");
+            }
         }
 
         if (fragment != null) {

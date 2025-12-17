@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:id="@+id/layoutMessageMy"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:background="@drawable/bubble_my"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="visible"> <TextView
+        android:id="@+id/tvMessageMy"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="הודעה שלי"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvTimeMy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="10:30"
+            android:textColor="#E0E0E0"
+            android:textSize="10sp"
+            android:layout_gravity="end"
+            android:layout_marginTop="4dp"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutMessageOther"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:background="@drawable/bubble_other"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone"> <TextView
+        android:id="@+id/tvNameOther"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="שם השולח"
+        android:textColor="#1976D2"
+        android:textStyle="bold"
+        android:textSize="12sp"
+        android:layout_marginBottom="2dp"/>
+
+        <TextView
+            android:id="@+id/tvMessageOther"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="הודעה מהצד השני"
+            android:textColor="#000000"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvTimeOther"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="10:31"
+            android:textColor="#757575"
+            android:textSize="10sp"
+            android:layout_gravity="start"
+            android:layout_marginTop="4dp"/>
+    </LinearLayout>
+
+</LinearLayout>

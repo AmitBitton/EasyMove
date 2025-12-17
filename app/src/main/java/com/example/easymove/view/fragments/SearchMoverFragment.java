@@ -23,6 +23,7 @@ import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
 import com.example.easymove.adapters.MoversAdapter;
 import com.example.easymove.model.UserProfile;
+import com.example.easymove.viewmodel.ChatViewModel; // הוספנו את ה-ViewModel החדש
 import com.example.easymove.viewmodel.UserViewModel;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.libraries.places.api.Places;
@@ -37,6 +38,7 @@ import java.util.List;
 public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMoverActionClickListener {
 
     private UserViewModel userViewModel;
+    private ChatViewModel chatViewModel; // משתנה לניהול הצ'אט
     private MoversAdapter adapter;
 
     private TextView tvSource, tvDest;
@@ -45,9 +47,7 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
     private LatLng sourceLatLng = null;
     private LatLng destLatLng = null;
 
-    // דגל כדי למנוע Toast קופץ בפתיחה
     private boolean hasSearched = false;
-
     private boolean isSelectingSource = true;
 
     private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
@@ -74,7 +74,9 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
             Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
         }
 
+        // אתחול ה-ViewModels
         userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
+        chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class); // אתחול ChatViewModel
 
         tvSource = view.findViewById(R.id.tvSourceResult);
         tvDest = view.findViewById(R.id.tvDestResult);
@@ -83,11 +85,10 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         RecyclerView recycler = view.findViewById(R.id.recyclerMovers);
         recycler.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        // העברת ה-Listener (this) לאדפטר
         adapter = new MoversAdapter(this);
         recycler.setAdapter(adapter);
 
-        // מאזינים
+        // מאזינים לכפתורים
         view.findViewById(R.id.btnSourceAddress).setOnClickListener(v -> {
             isSelectingSource = true;
             openPlacePicker();
@@ -100,17 +101,36 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
 
         btnSearch.setOnClickListener(v -> performSearch());
 
-        // האזנה לתוצאות
+        // --- האזנה לנתונים (Observers) ---
+
+        // 1. תוצאות חיפוש מובילים
         userViewModel.getMoversListLiveData().observe(getViewLifecycleOwner(), movers -> {
             adapter.setMovers(movers);
-
-            // התיקון: הצגת הודעה רק אם המשתמש ביצע חיפוש אקטיבי
             if (hasSearched && movers.isEmpty()) {
                 Toast.makeText(getContext(), "לא נמצאו מובילים ברדיוס הקרוב", Toast.LENGTH_LONG).show();
             }
         });
 
         userViewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), error -> {
+            if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
+        });
+
+        // 2. האזנה ליצירת צ'אט (ChatViewModel)
+        chatViewModel.getNavigateToChatId().observe(getViewLifecycleOwner(), chatId -> {
+            if (chatId != null) {
+                chatViewModel.onChatNavigated(); // איפוס כדי שלא יקפוץ שוב
+
+                // כרגע רק מציגים הודעה, בשלב הבא נפתח את מסך הצ'אט הממשי
+                Toast.makeText(getContext(), "צ'אט נוצר בהצלחה! ID: " + chatId, Toast.LENGTH_SHORT).show();
+
+                // מעבר ל-ChatActivity עם ה-ID
+                Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
+                intent.putExtra("CHAT_ID", chatId);
+                startActivity(intent);
+            }
+        });
+
+        chatViewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
             if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
         });
     }
@@ -140,11 +160,8 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
 
     private void performSearch() {
         if (sourceLatLng != null) {
-            hasSearched = true; // סימון שבוצע חיפוש
-
-            // ניקוי הרשימה לפני חיפוש חדש (אופציונלי)
-            adapter.setMovers(new ArrayList<>());
-
+            hasSearched = true;
+            adapter.setMovers(new ArrayList<>()); // איפוס הרשימה לחווי ויזואלי של טעינה
             userViewModel.searchMoversByLocation(sourceLatLng);
         }
     }
@@ -153,12 +170,12 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
 
     @Override
     public void onChatClick(UserProfile mover) {
-        Toast.makeText(getContext(), "פתיחת צ'אט עם " + mover.getName(), Toast.LENGTH_SHORT).show();
+        // קריאה ל-ViewModel ליצירת/פתיחת הצ'אט
+        chatViewModel.startChatWithMover(mover);
     }
 
     @Override
     public void onDetailsClick(UserProfile mover) {
-        // כאן תקפיץ דיאלוג או תעבור למסך עם ה-"About" המלא
         new android.app.AlertDialog.Builder(getContext())
                 .setTitle("על " + mover.getName())
                 .setMessage(mover.getAbout() != null ? mover.getAbout() : "אין מידע נוסף")
