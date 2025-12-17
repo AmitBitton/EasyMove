@@ -3,7 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="24dp"
-    android:layoutDirection="rtl">
+    android:layoutDirection="rtl"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -36,7 +37,6 @@
             android:inputType="textPassword"
             android:layout_marginBottom="16dp" />
 
-        <!-- השדות האלו יופיעו רק במצב הרשמה -->
         <EditText
             android:id="@+id/editName"
             android:layout_width="match_parent"
@@ -67,7 +67,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="8dp"
             android:visibility="gone">
 
             <RadioButton
@@ -75,7 +75,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="לקוח"
-                android:checked="true" />
+                android:checked="true"
+                android:layout_marginEnd="16dp"/>
 
             <RadioButton
                 android:id="@+id/radio_mover"
@@ -83,6 +84,42 @@
                 android:layout_height="wrap_content"
                 android:text="מוביל" />
         </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/layoutMoverRegistration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="#F1F8E9"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="כתובת בסיס (חובה למוביל):"
+                android:textStyle="bold"
+                android:textColor="#33691E"
+                android:layout_marginBottom="4dp"/>
+
+            <TextView
+                android:id="@+id/textSelectedAddressAuth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="לא נבחר מיקום"
+                android:padding="8dp"
+                android:background="#FFFFFF"
+                android:layout_marginBottom="8dp"/>
+
+            <Button
+                android:id="@+id/btnPickLocationAuth"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="לחץ לבחירת כתובת במפה"
+                android:textSize="12sp"
+                android:backgroundTint="#689F38"/>
+        </LinearLayout>
 
         <Button
             android:id="@+id/buttonAction"
@@ -92,11 +129,24 @@
             android:layout_marginBottom="12dp" />
 
         <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="- או -"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp" />
+
+        <com.google.android.gms.common.SignInButton
+            android:id="@+id/btnGoogleSignIn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+        <TextView
             android:id="@+id/switchModeText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="אין לך חשבון? להרשמה לחצי כאן"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:padding="8dp"/>
 
     </LinearLayout>
 </ScrollView>

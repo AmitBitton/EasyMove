@@ -9,6 +9,6 @@
     <item
         android:id="@+id/nav_chats"
         android:title="צ׳אטים"
-        android:icon="@android:drawable/ic_dialog_email" />
+        android:icon="@android:drawable/sym_action_chat" />
 
 </menu>

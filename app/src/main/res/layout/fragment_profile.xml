@@ -12,7 +12,6 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- כותרת -->
         <TextView
             android:id="@+id/profile_title"
             android:layout_width="wrap_content"
@@ -22,7 +21,6 @@
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
-        <!-- תמונת פרופיל -->
         <ImageView
             android:id="@+id/image_profile"
             android:layout_width="120dp"
@@ -42,7 +40,6 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="24dp" />
 
-        <!-- שם -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -56,7 +53,6 @@
             android:inputType="textPersonName"
             android:layout_marginBottom="12dp" />
 
-        <!-- טלפון -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -70,7 +66,6 @@
             android:inputType="phone"
             android:layout_marginBottom="12dp" />
 
-        <!-- סוג משתמש (טקסט לקריאה בלבד לעכשיו) -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -85,11 +80,11 @@
             android:background="#EEEEEE"
             android:layout_marginBottom="12dp" />
 
-        <!-- כתובת מוצא -->
         <TextView
+            android:id="@+id/label_from_address"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="כתובת מוצא (ברירת מחדל)" />
+            android:text="כתובת מוצא (ברירת מחדל ללקוח)" />
 
         <EditText
             android:id="@+id/edit_from_address"
@@ -99,11 +94,11 @@
             android:inputType="textPostalAddress"
             android:layout_marginBottom="12dp" />
 
-        <!-- כתובת יעד -->
         <TextView
+            android:id="@+id/label_to_address"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="כתובת יעד (ברירת מחדל)" />
+            android:text="כתובת יעד (ברירת מחדל ללקוח)" />
 
         <EditText
             android:id="@+id/edit_to_address"
@@ -113,7 +108,6 @@
             android:inputType="textPostalAddress"
             android:layout_marginBottom="12dp" />
 
-        <!-- About (בעיקר למוביל, אבל אפשר גם ללקוח) -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -129,7 +123,65 @@
             android:gravity="top"
             android:layout_marginBottom="16dp" />
 
-        <!-- כפתור שמירה -->
+        <LinearLayout
+            android:id="@+id/layoutMoverFields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp"
+            android:background="#F0F4C3"
+            android:padding="16dp">
+
+            <TextView
+                android:text="הגדרת בסיס יציאה (למובילים)"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:text="כתובת בסיס נבחרת:"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+
+            <TextView
+                android:id="@+id/tvSelectedMoverAddress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="לא נבחרה כתובת"
+                android:padding="8dp"
+                android:background="#FFFFFF"
+                android:layout_marginBottom="8dp"/>
+
+            <Button
+                android:id="@+id/btnPickMoverLocation"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="שנה מיקום בסיס"
+                android:backgroundTint="#4CAF50"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tvRadiusLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="רדיוס שירות: 30 ק״מ"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"/>
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderRadius"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:valueFrom="10"
+                android:valueTo="200"
+                android:stepSize="10"
+                android:value="30"/>
+
+        </LinearLayout>
+
         <Button
             android:id="@+id/button_save_profile"
             android:layout_width="match_parent"
@@ -137,7 +189,6 @@
             android:text="שמירת פרופיל"
             android:layout_marginBottom="12dp" />
 
-        <!-- הודעת שגיאה -->
         <TextView
             android:id="@+id/text_error"
             android:layout_width="match_parent"
@@ -146,7 +197,6 @@
             android:visibility="gone"
             android:layout_marginBottom="8dp" />
 
-        <!-- אינדיקציית טעינה -->
         <ProgressBar
             android:id="@+id/progress_loading"
             style="?android:attr/progressBarStyle"
@@ -156,5 +206,4 @@
             android:visibility="gone" />
 
     </LinearLayout>
-
 </androidx.core.widget.NestedScrollView>
