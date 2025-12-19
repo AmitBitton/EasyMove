@@ -1,9 +1,12 @@
 package com.example.easymove.view.activities;
-
+import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -12,6 +15,9 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.easymove.model.Chat;
+import com.example.easymove.model.repository.ChatRepository;
+import com.example.easymove.model.repository.MoveRepository;
 import com.example.easymove.R;
 import com.example.easymove.adapters.ChatAdapter;
 import com.example.easymove.model.Message;
@@ -35,18 +41,25 @@ public class ChatActivity extends AppCompatActivity {
     private String currentUserName;
 
     private FirebaseFirestore db;
+    private ChatRepository chatRepository;
+    private MoveRepository moveRepository;
     private ChatAdapter adapter;
     private List<Message> messageList;
 
     private EditText editInput;
     private RecyclerView recyclerView;
     private TextView tvTitle;
+    private LinearLayout layoutConfirmMove;
+    private TextView tvConfirmStatus;
+    private Button btnConfirmMove;
+
+    private Chat currentChat;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_chat);
-
+        android.view.View view = getLayoutInflater().inflate(R.layout.activity_chat, null);
+        setContentView(view);
         // 1. קבלת נתונים
         chatId = getIntent().getStringExtra("CHAT_ID");
         currentUserId = FirebaseAuth.getInstance().getUid();
@@ -58,7 +71,8 @@ public class ChatActivity extends AppCompatActivity {
         }
 
         db = FirebaseFirestore.getInstance();
-
+        chatRepository = new ChatRepository();
+        moveRepository = new MoveRepository();
         // טעינת השם שלי (לשליחת הודעות)
         new UserRepository().getUserNameById(currentUserId).addOnSuccessListener(name -> {
             currentUserName = name;
@@ -66,6 +80,7 @@ public class ChatActivity extends AppCompatActivity {
 
         initViews();
         setupRecyclerView();
+        listenForChatHeader();
         listenForMessages(); // האזנה בזמן אמת
     }
 
@@ -83,6 +98,11 @@ public class ChatActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.recyclerChat);
 
         btnSend.setOnClickListener(v -> sendMessage());
+        layoutConfirmMove = findViewById(R.id.layoutConfirmMove);
+        tvConfirmStatus = findViewById(R.id.tvConfirmStatus);
+        btnConfirmMove = findViewById(R.id.btnConfirmMove);
+
+        btnConfirmMove.setOnClickListener(v -> onConfirmClicked());
     }
 
     private void setupRecyclerView() {
@@ -91,7 +111,115 @@ public class ChatActivity extends AppCompatActivity {
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
     }
+    private void listenForChatHeader() {
+        db.collection("chats").document(chatId)
+                .addSnapshotListener((snapshot, error) -> {
+                    if (error != null) return;
+                    if (snapshot == null || !snapshot.exists()) return;
 
+                    currentChat = snapshot.toObject(Chat.class);
+                    if (currentChat == null) return;
+
+                    currentChat.setCurrentUserId(currentUserId);
+                    String title = currentChat.getChatTitle();
+                    if (title != null && !title.trim().isEmpty()) {
+                        tvTitle.setText(title);
+                    }
+
+                    updateConfirmCardUi(currentChat);
+                });
+    }
+    private void updateConfirmCardUi(Chat chat) {
+        boolean isMover = currentUserId.equals(chat.getMoverId());
+        boolean isCustomer = currentUserId.equals(chat.getCustomerId());
+
+        if (!isMover && !isCustomer) {
+            layoutConfirmMove.setVisibility(View.GONE);
+            return;
+        }
+
+        boolean moverConfirmed = chat.isMoverConfirmed();
+        boolean customerConfirmed = chat.isCustomerConfirmed();
+
+        // לוגיקה מעודכנת להצגת הכפתור
+        if (isMover) {
+            layoutConfirmMove.setVisibility(View.VISIBLE);
+            if (!moverConfirmed) {
+                tvConfirmStatus.setText("לחץ כדי לאשר שתיאמתם הובלה");
+                btnConfirmMove.setText("תיאמתי עם הלקוח");
+                btnConfirmMove.setEnabled(true);
+            } else if (!customerConfirmed) {
+                tvConfirmStatus.setText("אישרת ✅ ממתינים לאישור הלקוח...");
+                btnConfirmMove.setText("ממתין ללקוח");
+                btnConfirmMove.setEnabled(false);
+            } else {
+                tvConfirmStatus.setText("הובלה תואמה ונסגרה ✅");
+                btnConfirmMove.setText("סגור");
+                btnConfirmMove.setEnabled(false);
+            }
+        } else if (isCustomer) {
+            if (!moverConfirmed) {
+                layoutConfirmMove.setVisibility(View.GONE); // לקוח לא רואה עד שהמוביל מאשר
+            } else {
+                layoutConfirmMove.setVisibility(View.VISIBLE);
+                if (!customerConfirmed) {
+                    tvConfirmStatus.setText("המוביל אישר! אשר/י גם את/ה:");
+                    btnConfirmMove.setText("אני מאשר/ת את ההובלה");
+                    btnConfirmMove.setEnabled(true);
+                } else {
+                    tvConfirmStatus.setText("ההובלה תואמה בהצלחה! 🎉");
+                    btnConfirmMove.setText("תואם");
+                    btnConfirmMove.setEnabled(false);
+                }
+            }
+        }
+    }
+    private void onConfirmClicked() {
+        if (currentChat == null) return;
+
+        boolean isMover = currentUserId.equals(currentChat.getMoverId());
+        boolean isCustomer = currentUserId.equals(currentChat.getCustomerId());
+
+        // --- פעולת מוביל (ללא שינוי) ---
+        if (isMover) {
+            if (currentChat.isMoverConfirmed()) return;
+
+            btnConfirmMove.setEnabled(false);
+            chatRepository.setMoverConfirmed(chatId)
+                    .addOnSuccessListener(unused ->
+                            Toast.makeText(this, "אישרת ✅ ממתין ללקוח", Toast.LENGTH_SHORT).show()
+                    )
+                    .addOnFailureListener(e -> {
+                        btnConfirmMove.setEnabled(true);
+                        Toast.makeText(this, "שגיאה: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+            return;
+        }
+
+        // --- פעולת לקוח (התיקון כאן) ---
+        if (isCustomer) {
+            if (!currentChat.isMoverConfirmed()) {
+                Toast.makeText(this, "המוביל חייב לאשר קודם", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (currentChat.isCustomerConfirmed()) return;
+
+            btnConfirmMove.setEnabled(false);
+
+            // ✅ קריאה לפונקציה החדשה בלי כתובות!
+            // המערכת תמצא לבד את ההובלה הפתוחה שלך ותחבר אליה את המוביל
+            moveRepository.confirmMoveByCustomer(
+                    chatId,
+                    currentChat.getMoverId(),
+                    currentUserId
+            ).addOnSuccessListener(unused -> {
+                Toast.makeText(this, "ההובלה תואמה בהצלחה! בדוק את 'ההובלה שלי'", Toast.LENGTH_LONG).show();
+            }).addOnFailureListener(e -> {
+                btnConfirmMove.setEnabled(true);
+                Toast.makeText(this, "שגיאה: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
+        }
+    }
     private void listenForMessages() {
         // האזנה לתת-קולקשן "messages" בתוך הצ'אט הספציפי
         db.collection("chats").document(chatId)

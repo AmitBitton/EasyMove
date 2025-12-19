@@ -55,7 +55,8 @@ public class UserProfile {
     // Rating data for movers (0 if no ratings yet)
     private float rating;              // Average rating value
     private int ratingCount;           // Number of ratings received
-
+    private Integer floor;       // קומה אופציונלית
+    private Integer apartment;    // דירה אופציונלית
     /* -----------------------  Empty constructor for Firebase  ----------------------- */
 
     public UserProfile() {
@@ -161,4 +162,10 @@ public class UserProfile {
 
     public int getRatingCount() { return ratingCount; }
     public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
+
+    public Integer getFloor() { return floor; }
+    public void setFloor(Integer floor) { this.floor = floor; }
+
+    public Integer getApartment() { return apartment; }
+    public void setApartment(Integer apartment) { this.apartment = apartment; }
 }

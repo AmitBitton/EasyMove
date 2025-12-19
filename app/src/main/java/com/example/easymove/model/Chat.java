@@ -21,9 +21,16 @@ public class Chat implements ChatListItem {
     private String user2Id;
     private String user2Name;
     private String user2Image;
+    // תיאום הובלה
+    private String customerId;          // מי פתח את הצ'אט (הלקוח)
+    private String moverId;             // המוביל
+    private boolean moverConfirmed;     // המוביל לחץ "תיאמתי"
+    private boolean customerConfirmed;  // הלקוח אישר
+    private Long moverConfirmedAt;
+    private Long customerConfirmedAt;
 
     // שדה עזר (לא נשמר במסד נתונים) לדעת מי "האני" הנוכחי באפליקציה
-    private String currentUserId;
+    private transient String currentUserId;
 
     public Chat() {} // חובה לפיירבייס
 
@@ -93,4 +100,21 @@ public class Chat implements ChatListItem {
     public void setUser2Name(String user2Name) { this.user2Name = user2Name; }
     public String getUser2Image() { return user2Image; }
     public void setUser2Image(String user2Image) { this.user2Image = user2Image; }
+    public String getCustomerId() { return customerId; }
+    public void setCustomerId(String customerId) { this.customerId = customerId; }
+
+    public String getMoverId() { return moverId; }
+    public void setMoverId(String moverId) { this.moverId = moverId; }
+
+    public boolean isMoverConfirmed() { return moverConfirmed; }
+    public void setMoverConfirmed(boolean moverConfirmed) { this.moverConfirmed = moverConfirmed; }
+
+    public boolean isCustomerConfirmed() { return customerConfirmed; }
+    public void setCustomerConfirmed(boolean customerConfirmed) { this.customerConfirmed = customerConfirmed; }
+
+    public Long getMoverConfirmedAt() { return moverConfirmedAt; }
+    public void setMoverConfirmedAt(Long moverConfirmedAt) { this.moverConfirmedAt = moverConfirmedAt; }
+
+    public Long getCustomerConfirmedAt() { return customerConfirmedAt; }
+    public void setCustomerConfirmedAt(Long customerConfirmedAt) { this.customerConfirmedAt = customerConfirmedAt; }
 }

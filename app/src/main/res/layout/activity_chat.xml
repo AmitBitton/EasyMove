@@ -23,6 +23,33 @@
             android:textStyle="bold"/>
     </androidx.appcompat.widget.Toolbar>
 
+    <LinearLayout
+        android:id="@+id/layoutConfirmMove"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:layout_margin="8dp"
+        android:background="#E8F5E9"
+        android:elevation="2dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvConfirmStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="סטטוס תיאום"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnConfirmMove"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="תיאמתי עם הלקוח" />
+    </LinearLayout>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerChat"
         android:layout_width="match_parent"

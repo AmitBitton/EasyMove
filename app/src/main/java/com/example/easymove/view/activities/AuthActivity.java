@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
 import com.example.easymove.model.UserProfile;
+import com.example.easymove.model.repository.MoveRepository;
 import com.firebase.geofire.GeoFireUtils;
 import com.firebase.geofire.GeoLocation;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -259,13 +260,13 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private void performRegistration(String email, String password, String name) {
-        // (העתק את הלוגיקה מהקובץ הקודם)
         String phone = editPhone.getText().toString().trim();
         String userType = radioCustomer.isChecked() ? "customer" : "mover";
 
         auth.createUserWithEmailAndPassword(email, password)
                 .addOnSuccessListener(result -> {
                     String uid = result.getUser().getUid();
+
                     UserProfile profile = new UserProfile();
                     profile.setUserId(uid);
                     profile.setName(name);
@@ -280,14 +281,41 @@ public class AuthActivity extends AppCompatActivity {
                         profile.setServiceRadiusKm(30);
                     }
 
+                    // 1) קודם שומרים את המשתמש
                     db.collection("users").document(uid).set(profile)
                             .addOnSuccessListener(unused -> {
-                                Toast.makeText(this, "נרשמת בהצלחה!", Toast.LENGTH_SHORT).show();
-                                startMain();
+
+                                // 2) אם זה לקוח - יוצרים לו OPEN move ורק אז נכנסים לאפליקציה
+                                if ("customer".equals(userType)) {
+                                    new MoveRepository()
+                                            .ensureOpenMoveForCustomer(uid)
+                                            .addOnSuccessListener(v -> {
+                                                Toast.makeText(this, "נרשמת בהצלחה!", Toast.LENGTH_SHORT).show();
+                                                startMain();
+                                            })
+                                            .addOnFailureListener(e -> {
+                                                Toast.makeText(this,
+                                                        "נרשמת, אבל לא נוצרה הובלה: " + e.getMessage(),
+                                                        Toast.LENGTH_LONG).show();
+                                                startMain(); // עדיין נכנסים כדי לא לתקוע משתמש
+                                            });
+                                } else {
+                                    Toast.makeText(this, "נרשמת בהצלחה!", Toast.LENGTH_SHORT).show();
+                                    startMain();
+                                }
                             })
-                            .addOnFailureListener(e -> Toast.makeText(this, "שגיאה בשמירת פרופיל: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                            .addOnFailureListener(e ->
+                                    Toast.makeText(this,
+                                            "שגיאה בשמירת פרופיל: " + e.getMessage(),
+                                            Toast.LENGTH_LONG).show()
+                            );
+
                 })
-                .addOnFailureListener(e -> Toast.makeText(this, "שגיאה בהרשמה: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                .addOnFailureListener(e ->
+                        Toast.makeText(this,
+                                "שגיאה בהרשמה: " + e.getMessage(),
+                                Toast.LENGTH_LONG).show()
+                );
     }
 
     // --- לוגיקה חדשה: טיפול בחזרה מגוגל ---
@@ -349,21 +377,41 @@ public class AuthActivity extends AppCompatActivity {
 
     private void saveGoogleUserProfile(String uid, String userType) {
         FirebaseUser firebaseUser = auth.getCurrentUser();
+
         UserProfile profile = new UserProfile();
         profile.setUserId(uid);
-        profile.setName(firebaseUser.getDisplayName()); // לוקח שם מגוגל
-        profile.setPhone(firebaseUser.getPhoneNumber()); // לוקח טלפון (לרוב ריק)
+        profile.setName(firebaseUser != null ? firebaseUser.getDisplayName() : null);
+        profile.setPhone(firebaseUser != null ? firebaseUser.getPhoneNumber() : null);
         profile.setUserType(userType);
 
-        // אם זה מוביל שרק נרשם בגוגל, ניתן לו ערכים ריקים והוא יעדכן בפרופיל
-        if("mover".equals(userType)) {
+        if ("mover".equals(userType)) {
             profile.setServiceRadiusKm(30);
         }
 
+        // 1) קודם שומרים את המשתמש
         db.collection("users").document(uid).set(profile)
-                .addOnSuccessListener(aVoid -> startMain())
-                .addOnFailureListener(e -> Toast.makeText(this, "שגיאה בשמירה", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(unused -> {
+
+                    // 2) אם זה לקוח - יוצרים OPEN move ורק אז נכנסים
+                    if ("customer".equals(userType)) {
+                        new MoveRepository()
+                                .ensureOpenMoveForCustomer(uid)
+                                .addOnSuccessListener(v -> startMain())
+                                .addOnFailureListener(e -> {
+                                    Toast.makeText(this,
+                                            "נרשמת, אבל לא נוצרה הובלה: " + e.getMessage(),
+                                            Toast.LENGTH_LONG).show();
+                                    startMain();
+                                });
+                    } else {
+                        startMain();
+                    }
+                })
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, "שגיאה בשמירה: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                );
     }
+
 
     private void startMain() {
         startActivity(new Intent(this, MainActivity.class));

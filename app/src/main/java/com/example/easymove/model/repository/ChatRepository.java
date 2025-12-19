@@ -12,6 +12,8 @@ import com.google.firebase.firestore.SetOptions;
 
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ChatRepository {
 
@@ -50,15 +52,20 @@ public class ChatRepository {
         chat.setId(chatId);
         chat.setUserIds(Arrays.asList(me.getUserId(), other.getUserId()));
 
-        // שמירת פרטי משתמש 1 (אני)
+        // שמירת פרטי משתמש 1 (אני) me = customer
         chat.setUser1Id(me.getUserId());
         chat.setUser1Name(me.getName());
         chat.setUser1Image(me.getProfileImageUrl());
 
-        // שמירת פרטי משתמש 2 (הצד השני)
+        // other = mover שמירת פרטי משתמש 2 (הצד השני)
         chat.setUser2Id(other.getUserId());
         chat.setUser2Name(other.getName());
         chat.setUser2Image(other.getProfileImageUrl());
+
+        chat.setCustomerId(me.getUserId());
+        chat.setMoverId(other.getUserId());
+        chat.setMoverConfirmed(false);
+        chat.setCustomerConfirmed(false);
 
         chat.setLastUpdated(new Timestamp(new Date()));
         chat.setLastMessage("צ'אט חדש נוצר");
@@ -83,5 +90,25 @@ public class ChatRepository {
                 .whereArrayContains("userIds", myUserId) // רק צ'אטים שאני נמצא בהם
                 .orderBy("lastUpdated", com.google.firebase.firestore.Query.Direction.DESCENDING) // מיון לפי זמן
                 .get();
+    }
+
+    /**
+     * המוביל לוחץ ראשון "תיאמתי עם הלקוח"
+     */
+    public Task<Void> setMoverConfirmed(String chatId) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("moverConfirmed", true);
+        updates.put("moverConfirmedAt", System.currentTimeMillis());
+        return db.collection(CHATS_COLLECTION).document(chatId).update(updates);
+    }
+
+    /**
+     * הלקוח מאשר אחרי שהמוביל אישר
+     */
+    public Task<Void> setCustomerConfirmed(String chatId) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("customerConfirmed", true);
+        updates.put("customerConfirmedAt", System.currentTimeMillis());
+        return db.collection(CHATS_COLLECTION).document(chatId).update(updates);
     }
 }
