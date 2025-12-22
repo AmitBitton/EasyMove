@@ -11,20 +11,36 @@ public class MyMoveViewModel extends ViewModel {
 
     private final MoveRepository repository = new MoveRepository();
 
-    // הובלה נוכחית (אם יש null, סימן שאין הובלה פעילה)
     private final MutableLiveData<MoveRequest> currentMove = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
     private final MutableLiveData<String> errorMsg = new MutableLiveData<>();
 
-    public LiveData<MoveRequest> getCurrentMove() { return currentMove; }
-    public LiveData<Boolean> getIsLoading() { return isLoading; }
-    public LiveData<String> getErrorMsg() { return errorMsg; }
+    public LiveData<MoveRequest> getCurrentMove() {
+        return currentMove;
+    }
+
+    public LiveData<Boolean> getIsLoading() {
+        return isLoading;
+    }
+
+    public LiveData<String> getErrorMsg() {
+        return errorMsg;
+    }
 
     public void loadCurrentMove() {
         isLoading.setValue(true);
-        repository.getCurrentActiveMove()
+
+        String uid = repository.getCurrentUserId();
+        if (uid == null) {
+            errorMsg.setValue("אין משתמש מחובר");
+            isLoading.setValue(false);
+            currentMove.setValue(null);
+            return;
+        }
+
+        repository.ensureActiveMoveForCustomer(uid)
                 .addOnSuccessListener(move -> {
-                    currentMove.setValue(move); // יכול להיות null וזה תקין
+                    currentMove.setValue(move);
                     isLoading.setValue(false);
                 })
                 .addOnFailureListener(e -> {
@@ -35,14 +51,26 @@ public class MyMoveViewModel extends ViewModel {
 
     public void cancelCurrentMove() {
         MoveRequest move = currentMove.getValue();
+        if (move == null) return;
+
+        isLoading.setValue(true);
+        repository.cancelMove(move.getId())
+                .addOnSuccessListener(v -> loadCurrentMove())
+                .addOnFailureListener(e -> {
+                    errorMsg.setValue("ביטול נכשל");
+                    isLoading.setValue(false);
+                });
+    }
+
+    // --- הפונקציה החדשה לסגירת הובלה ---
+    public void markMoveAsCompleted() {
+        MoveRequest move = currentMove.getValue();
         if (move != null) {
             isLoading.setValue(true);
-            repository.cancelMove(move.getId())
-                    .addOnSuccessListener(v -> {
-                        loadCurrentMove(); // רענון
-                    })
+            repository.completeMove(move.getId())
+                    .addOnSuccessListener(v -> loadCurrentMove()) // טוען מחדש (וייצור חדשה)
                     .addOnFailureListener(e -> {
-                        errorMsg.setValue("ביטול נכשל");
+                        errorMsg.setValue("שגיאה בעדכון הסטטוס");
                         isLoading.setValue(false);
                     });
         }

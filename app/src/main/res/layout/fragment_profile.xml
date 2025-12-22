@@ -131,6 +131,29 @@
             android:text="בחר כתובת יעד"
             android:visibility="gone"
             android:layout_marginBottom="12dp" />
+        <!-- לקוח בלבד: תאריך הובלה (נערך רק באיזור אישי) -->
+        <TextView
+            android:id="@+id/label_move_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="תאריך הובלה" />
+
+        <TextView
+            android:id="@+id/tv_move_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="טרם נקבע תאריך"
+            android:padding="10dp"
+            android:background="#EEEEEE"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnPickMoveDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="בחר תאריך"
+            android:visibility="gone"
+            android:layout_marginBottom="12dp" />
 
         <!-- לקוח בלבד: קומה + דירה (אופציונלי) -->
         <TextView

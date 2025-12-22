@@ -1,6 +1,7 @@
 package com.example.easymove.view.fragments;
 
 import android.app.Activity;
+import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -26,7 +27,9 @@ import androidx.lifecycle.ViewModelProvider;
 import com.bumptech.glide.Glide;
 import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
+import com.example.easymove.model.MoveRequest;
 import com.example.easymove.model.UserProfile;
+import com.example.easymove.model.repository.MoveRepository;
 import com.example.easymove.viewmodel.UserViewModel;
 import com.firebase.geofire.GeoFireUtils;
 import com.firebase.geofire.GeoLocation;
@@ -39,13 +42,19 @@ import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
 import com.google.android.material.slider.Slider;
 
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class ProfileFragment extends Fragment {
 
     private UserViewModel viewModel;
     private UserProfile currentUserProfile;
+
+    private final MoveRepository moveRepository = new MoveRepository();
 
     private NestedScrollView profileScroll;
 
@@ -57,13 +66,17 @@ public class ProfileFragment extends Fragment {
     private EditText editPhone;
     private TextView textUserType;
 
-    // כתובות לקוח (TextView) + כפתורי בחירה
+    // כתובות לקוח
     private TextView tvFromAddress;
     private TextView tvToAddress;
     private Button btnPickFromAddress;
     private Button btnPickToAddress;
 
-    // לקוח בלבד: קומה + דירה (אופציונלי)
+    // תאריך הובלה (לקוח)
+    private TextView labelMoveDate, tvMoveDate;
+    private Button btnPickMoveDate;
+
+    // לקוח בלבד: קומה + דירה
     private TextView labelFloor, labelApartment;
     private EditText editFloor, editApartment;
 
@@ -80,14 +93,14 @@ public class ProfileFragment extends Fragment {
     private TextView textError;
     private ProgressBar progressBar;
 
-    // מוביל בלבד - מצב עריכה (הריבוע הירוק)
+    // מוביל בלבד - מצב עריכה
     private LinearLayout layoutMoverFields;
     private TextView tvSelectedMoverAddress;
     private Button btnPickMoverLocation;
     private TextView tvRadiusLabel;
     private Slider sliderRadius;
 
-    // מוביל בלבד - מצב תצוגה (שדה רגיל)
+    // מוביל בלבד - מצב תצוגה
     private TextView labelMoverBaseAddress;
     private TextView tvMoverBaseAddress;
 
@@ -97,19 +110,23 @@ public class ProfileFragment extends Fragment {
     private enum AddressPickType { FROM, TO, MOVER }
     private AddressPickType currentPickType = AddressPickType.MOVER;
 
-    // מצב עריכה
     private boolean isEditMode = false;
 
-    // שמירת ערכים ישנים בשביל "ביטול"
+    // שמירת ערכים ישנים לביטול
     private String oldName, oldPhone, oldAbout, oldFromAddress, oldToAddress;
-
-    // לקוח - שמירת ערכים לביטול
     private String oldFloorStr, oldApartmentStr;
 
-    // מוביל - שמירת ערכים לביטול (בסיס + מיקום + רדיוס)
+    // תאריך הובלה לביטול
+    private long oldMoveDate = 0;
+    private long selectedMoveDate = 0;
+
+    // מוביל - שמירת ערכים לביטול
     private String oldMoverBaseAddress, oldGeohash;
     private double oldLat, oldLng;
     private int oldRadius;
+
+    // ההובלה הפעילה הנוכחית (כדי לעדכן אותה)
+    private MoveRequest activeMove;
 
     private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -167,7 +184,10 @@ public class ProfileFragment extends Fragment {
         btnPickFromAddress = view.findViewById(R.id.btnPickFromAddress);
         btnPickToAddress = view.findViewById(R.id.btnPickToAddress);
 
-        // לקוח: קומה + דירה
+        labelMoveDate = view.findViewById(R.id.label_move_date);
+        tvMoveDate = view.findViewById(R.id.tv_move_date);
+        btnPickMoveDate = view.findViewById(R.id.btnPickMoveDate);
+
         labelFloor = view.findViewById(R.id.label_floor);
         labelApartment = view.findViewById(R.id.label_apartment);
         editFloor = view.findViewById(R.id.edit_floor);
@@ -193,7 +213,6 @@ public class ProfileFragment extends Fragment {
         tvRadiusLabel = view.findViewById(R.id.tvRadiusLabel);
         sliderRadius = view.findViewById(R.id.sliderRadius);
 
-        // מצב תצוגה למוביל (שדה רגיל)
         labelMoverBaseAddress = view.findViewById(R.id.label_mover_base_address);
         tvMoverBaseAddress = view.findViewById(R.id.tvMoverBaseAddress);
     }
@@ -211,11 +230,10 @@ public class ProfileFragment extends Fragment {
         );
 
         buttonChangeImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-
         buttonEdit.setOnClickListener(v -> enterEditMode());
 
         buttonSave.setOnClickListener(v -> {
-            saveProfileFromUi();
+            saveProfileFromUi();   // כולל עדכון ההובלה הפעילה
             exitEditMode();
         });
 
@@ -236,6 +254,8 @@ public class ProfileFragment extends Fragment {
             openPlacePicker();
         });
 
+        btnPickMoveDate.setOnClickListener(v -> openDatePicker());
+
         sliderRadius.addOnChangeListener((slider, value, fromUser) -> {
             if (!fromUser) return;
             int radius = (int) value;
@@ -253,6 +273,9 @@ public class ProfileFragment extends Fragment {
                 isEditMode = false;
                 fillUiFromProfile(profile);
                 exitEditMode();
+
+                // בנוסף: טוענים הובלה פעילה כדי להציג תאריך + לאפשר עדכון
+                loadActiveMoveForCustomerIfNeeded();
             }
         });
 
@@ -277,6 +300,24 @@ public class ProfileFragment extends Fragment {
         });
     }
 
+    private void loadActiveMoveForCustomerIfNeeded() {
+        if (currentUserProfile == null) return;
+        if (!"customer".equals(currentUserProfile.getUserType())) return;
+        if (currentUserProfile.getUserId() == null) return;
+
+        moveRepository.getCurrentActiveMove(currentUserProfile.getUserId())
+                .addOnSuccessListener(move -> {
+                    activeMove = move;
+                    if (activeMove != null) {
+                        selectedMoveDate = activeMove.getMoveDate();
+                        updateMoveDateText();
+                    } else {
+                        selectedMoveDate = 0;
+                        tvMoveDate.setText("טרם נקבע תאריך");
+                    }
+                });
+    }
+
     private void fillUiFromProfile(@NonNull UserProfile profile) {
         if (profile.getName() != null) editName.setText(profile.getName());
         if (profile.getPhone() != null) editPhone.setText(profile.getPhone());
@@ -285,7 +326,6 @@ public class ProfileFragment extends Fragment {
         if (type == null) type = "customer";
         textUserType.setText(type);
 
-        // אודות - רק למוביל
         if ("mover".equals(type)) {
             labelAbout.setVisibility(View.VISIBLE);
             editAbout.setVisibility(View.VISIBLE);
@@ -305,9 +345,7 @@ public class ProfileFragment extends Fragment {
         }
 
         if ("mover".equals(type)) {
-            // --- מוביל ---
-
-            // לקוח - שדות לא רלוונטיים
+            // מוביל: מסתירים שדות לקוח
             labelFromAddress.setVisibility(View.GONE);
             tvFromAddress.setVisibility(View.GONE);
             btnPickFromAddress.setVisibility(View.GONE);
@@ -316,7 +354,11 @@ public class ProfileFragment extends Fragment {
             tvToAddress.setVisibility(View.GONE);
             btnPickToAddress.setVisibility(View.GONE);
 
-            // קומה/דירה - לא רלוונטי
+            // תאריך הובלה (לקוח) לא רלוונטי
+            labelMoveDate.setVisibility(View.GONE);
+            tvMoveDate.setVisibility(View.GONE);
+            btnPickMoveDate.setVisibility(View.GONE);
+
             labelFloor.setVisibility(View.GONE);
             editFloor.setVisibility(View.GONE);
             labelApartment.setVisibility(View.GONE);
@@ -327,12 +369,10 @@ public class ProfileFragment extends Fragment {
                             ? profile.getDefaultFromAddress()
                             : "טרם הוגדר בסיס יציאה";
 
-            // מצב תצוגה (שדה רגיל)
             labelMoverBaseAddress.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
             tvMoverBaseAddress.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
             tvMoverBaseAddress.setText(baseAddress);
 
-            // מצב עריכה (ריבוע ירוק) - רק בעריכה
             layoutMoverFields.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
             tvSelectedMoverAddress.setText(baseAddress);
 
@@ -344,17 +384,14 @@ public class ProfileFragment extends Fragment {
             sliderRadius.setEnabled(isEditMode);
 
         } else {
-            // --- לקוח ---
-
-            // מוביל - לא מציגים
+            // לקוח: מסתירים מוביל
             layoutMoverFields.setVisibility(View.GONE);
             labelMoverBaseAddress.setVisibility(View.GONE);
             tvMoverBaseAddress.setVisibility(View.GONE);
 
-            // כתובות לקוח - תמיד תצוגה
+            // כתובות לקוח
             labelFromAddress.setVisibility(View.VISIBLE);
             tvFromAddress.setVisibility(View.VISIBLE);
-
             labelToAddress.setVisibility(View.VISIBLE);
             tvToAddress.setVisibility(View.VISIBLE);
 
@@ -370,11 +407,17 @@ public class ProfileFragment extends Fragment {
                             : "לא נבחרה כתובת"
             );
 
-            // כפתורי בחירה - רק בעריכה
+            // תאריך הובלה
+            labelMoveDate.setVisibility(View.VISIBLE);
+            tvMoveDate.setVisibility(View.VISIBLE);
+            btnPickMoveDate.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+            updateMoveDateText();
+
+            // כפתורי בחירה לכתובות רק בעריכה
             btnPickFromAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
             btnPickToAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
 
-            // קומה/דירה - רק ללקוח
+            // קומה/דירה
             labelFloor.setVisibility(View.VISIBLE);
             editFloor.setVisibility(View.VISIBLE);
             labelApartment.setVisibility(View.VISIBLE);
@@ -403,12 +446,7 @@ public class ProfileFragment extends Fragment {
                 new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields)
                         .setCountry("IL");
 
-        // לקוח: חייב כתובת מלאה (כולל מספר בית)
-        // מוביל: לא חייב מספר בית (יכול לבחור רק עיר/אזור)
-        if (currentPickType == AddressPickType.MOVER) {
-            // אין TypeFilter.ADDRESS כדי לא לחסום בחירה של עיר בלבד
-            // (ה־Places יאפשר גם כתובת מלאה וגם מקום כללי)
-        } else {
+        if (currentPickType != AddressPickType.MOVER) {
             builder.setTypeFilter(TypeFilter.ADDRESS);
         }
 
@@ -434,7 +472,6 @@ public class ProfileFragment extends Fragment {
         String address = place.getAddress();
         if (address == null || address.isEmpty()) return;
 
-        // לקוח: חובה מספר בית
         if (!hasStreetNumber(place)) {
             Toast.makeText(getContext(), "בחרי כתובת מלאה עם מספר בית", Toast.LENGTH_SHORT).show();
             return;
@@ -450,7 +487,6 @@ public class ProfileFragment extends Fragment {
         String address = place.getAddress();
         if (address == null || address.isEmpty()) return;
 
-        // לקוח: חובה מספר בית
         if (!hasStreetNumber(place)) {
             Toast.makeText(getContext(), "בחרי כתובת מלאה עם מספר בית", Toast.LENGTH_SHORT).show();
             return;
@@ -466,7 +502,6 @@ public class ProfileFragment extends Fragment {
         String address = place.getAddress();
         if (address == null || address.isEmpty()) return;
 
-        // מוביל: לא דורשים מספר בית ✅
         double lat = place.getLatLng().latitude;
         double lng = place.getLatLng().longitude;
 
@@ -478,8 +513,32 @@ public class ProfileFragment extends Fragment {
         currentUserProfile.setLng(lng);
         currentUserProfile.setGeohash(hash);
 
-        // אצל מוביל: בסיס יציאה נשמר ב-defaultFromAddress
         currentUserProfile.setDefaultFromAddress(address);
+    }
+
+    private void openDatePicker() {
+        Calendar c = Calendar.getInstance();
+        if (selectedMoveDate > 0) c.setTimeInMillis(selectedMoveDate);
+
+        DatePickerDialog dialog = new DatePickerDialog(requireContext(), (view, year, month, dayOfMonth) -> {
+            c.set(year, month, dayOfMonth, 0, 0, 0);
+            selectedMoveDate = c.getTimeInMillis();
+            updateMoveDateText();
+        }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
+
+        dialog.getDatePicker().setMinDate(System.currentTimeMillis());
+        dialog.show();
+    }
+
+    private void updateMoveDateText() {
+        if (tvMoveDate == null) return;
+
+        if (selectedMoveDate > 0) {
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            tvMoveDate.setText(sdf.format(new Date(selectedMoveDate)));
+        } else {
+            tvMoveDate.setText("טרם נקבע תאריך");
+        }
     }
 
     private Integer parseOptionalInt(String s) {
@@ -503,10 +562,7 @@ public class ProfileFragment extends Fragment {
 
         if ("mover".equals(type)) {
             currentUserProfile.setAbout(editAbout.getText().toString().trim());
-            // בסיס/lat/lng/geohash כבר מתעדכנים בזמן הבחירה
-            // רדיוס מתעדכן בסליידר
         } else {
-            // לקוח: שדות אופציונליים
             Integer floor = parseOptionalInt(editFloor.getText().toString());
             Integer apt = parseOptionalInt(editApartment.getText().toString());
             currentUserProfile.setFloor(floor);
@@ -514,8 +570,25 @@ public class ProfileFragment extends Fragment {
         }
 
         viewModel.saveMyProfile(currentUserProfile);
-        Toast.makeText(getContext(), "הפרופיל עודכן בהצלחה", Toast.LENGTH_SHORT).show();
 
+        // עדכון ההובלה הפעילה מהאזור האישי (כתובות + תאריך)
+        if ("customer".equals(currentUserProfile.getUserType()) && currentUserProfile.getUserId() != null) {
+            moveRepository.getCurrentActiveMove(currentUserProfile.getUserId())
+                    .addOnSuccessListener(move -> {
+                        if (move == null) return;
+
+                        String from = currentUserProfile.getDefaultFromAddress();
+                        String to = currentUserProfile.getDefaultToAddress();
+                        long date = selectedMoveDate;
+
+                        moveRepository.updateMoveDetails(move.getId(), from, to, date)
+                                .addOnFailureListener(e ->
+                                        Toast.makeText(getContext(), "שגיאה בעדכון ההובלה: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                                );
+                    });
+        }
+
+        Toast.makeText(getContext(), "הפרופיל עודכן בהצלחה", Toast.LENGTH_SHORT).show();
         fillUiFromProfile(currentUserProfile);
     }
 
@@ -529,6 +602,8 @@ public class ProfileFragment extends Fragment {
         oldToAddress = tvToAddress.getText().toString();
         oldFloorStr = editFloor.getText().toString();
         oldApartmentStr = editApartment.getText().toString();
+
+        oldMoveDate = selectedMoveDate;
 
         if (currentUserProfile != null && "mover".equals(currentUserProfile.getUserType())) {
             oldMoverBaseAddress = currentUserProfile.getDefaultFromAddress();
@@ -557,9 +632,11 @@ public class ProfileFragment extends Fragment {
         if (!"mover".equals(type)) {
             btnPickFromAddress.setVisibility(View.VISIBLE);
             btnPickToAddress.setVisibility(View.VISIBLE);
+            btnPickMoveDate.setVisibility(View.VISIBLE);
         } else {
             btnPickFromAddress.setVisibility(View.GONE);
             btnPickToAddress.setVisibility(View.GONE);
+            btnPickMoveDate.setVisibility(View.GONE);
 
             btnPickMoverLocation.setEnabled(true);
             sliderRadius.setEnabled(true);
@@ -585,6 +662,7 @@ public class ProfileFragment extends Fragment {
 
         btnPickFromAddress.setVisibility(View.GONE);
         btnPickToAddress.setVisibility(View.GONE);
+        btnPickMoveDate.setVisibility(View.GONE);
 
         String type = currentUserProfile != null ? currentUserProfile.getUserType() : "customer";
         if ("mover".equals(type)) {
@@ -605,6 +683,9 @@ public class ProfileFragment extends Fragment {
         tvToAddress.setText(oldToAddress);
         editFloor.setText(oldFloorStr);
         editApartment.setText(oldApartmentStr);
+
+        selectedMoveDate = oldMoveDate;
+        updateMoveDateText();
 
         if (currentUserProfile != null) {
             currentUserProfile.setName(oldName);
@@ -633,8 +714,6 @@ public class ProfileFragment extends Fragment {
             } else {
                 currentUserProfile.setDefaultFromAddress(oldFromAddress);
                 currentUserProfile.setDefaultToAddress(oldToAddress);
-
-                // מחזירים גם במודל את הערכים האופציונליים
                 currentUserProfile.setFloor(parseOptionalInt(oldFloorStr));
                 currentUserProfile.setApartment(parseOptionalInt(oldApartmentStr));
             }

@@ -49,10 +49,19 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
         holder.tvDest.setText(move.getDestAddress());
 
         if ("CONFIRMED".equals(move.getStatus())) {
-            holder.tvStatus.setText("ממתין לתאריך");
+            long date = move.getMoveDate();
+
+            if (date > 0) {
+                java.text.SimpleDateFormat sdf =
+                        new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
+                holder.tvStatus.setText("תאריך: " + sdf.format(new java.util.Date(date)));
+            } else {
+                holder.tvStatus.setText("ממתין לתאריך");
+            }
         } else {
             holder.tvStatus.setText(move.getStatus());
         }
+
 
         // טעינת שם הלקוח
         holder.tvCustomerName.setText("טוען שם לקוח...");

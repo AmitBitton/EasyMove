@@ -29,6 +29,7 @@ android {
 
         // יצירת משתנה שאפשר להשתמש בו גם בקוד Java (למשל: BuildConfig.MAPS_KEY)
         buildConfigField "String", "MAPS_KEY", "\"${googleMapsKey}\""
+
     }
 
     buildTypes {

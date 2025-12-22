@@ -5,6 +5,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import com.example.easymove.model.MatchRequest;
 import com.example.easymove.model.UserProfile;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
@@ -308,5 +309,58 @@ public class UserRepository {
                 .addOnFailureListener(e ->
                         Log.e(TAG, "getAllCustomersExceptMe: failed to fetch customers", e)
                 );
+    }
+
+
+
+
+
+    // -----------------------------------------------------------
+    //  פונקציות לשידוך שותפים (Matchmaking)
+    // -----------------------------------------------------------
+
+    /**
+     * מביא את כל הלקוחות (Customers) כדי שנוכל לחפש ביניהם.
+     */
+    public Task<QuerySnapshot> getAllPotentialPartners() {
+        return db.collection("users")
+                .whereEqualTo("userType", "customer")
+                .get();
+    }
+
+    /**
+     * שליחת בקשת חברות למשתמש אחר.
+     */
+    public Task<Void> sendMatchRequest(String targetUserId) {
+        String myUid = uidOrThrow();
+
+        // קודם מביאים את השם שלי, כדי שיהיה כתוב יפה בבקשה
+        return getUserById(myUid).continueWithTask(task -> {
+            UserProfile myProfile = task.getResult();
+            String myName = (myProfile != null && myProfile.getName() != null) ? myProfile.getName() : "משתמש";
+
+            MatchRequest request = new MatchRequest(myUid, myName, targetUserId);
+
+            return db.collection("match_requests").add(request).continueWith(t -> null);
+        });
+    }
+
+    /**
+     * מביא את כל הבקשות שממתינות לי (סטטוס pending).
+     */
+    public Task<QuerySnapshot> getIncomingRequests() {
+        String myUid = uidOrThrow();
+        return db.collection("match_requests")
+                .whereEqualTo("toUserId", myUid)
+                .whereEqualTo("status", "pending")
+                .get();
+    }
+
+    /**
+     * עדכון סטטוס בקשה (אישור/דחייה).
+     */
+    public Task<Void> updateMatchRequestStatus(String requestId, String newStatus) {
+        return db.collection("match_requests").document(requestId)
+                .update("status", newStatus);
     }
 }

@@ -57,6 +57,9 @@ public class UserProfile {
     private int ratingCount;           // Number of ratings received
     private Integer floor;       // קומה אופציונלית
     private Integer apartment;    // דירה אופציונלית
+
+    // Default move date for the customer (editable only from Profile)
+    private Long defaultMoveDate; // can be null / 0
     /* -----------------------  Empty constructor for Firebase  ----------------------- */
 
     public UserProfile() {
@@ -168,4 +171,17 @@ public class UserProfile {
 
     public Integer getApartment() { return apartment; }
     public void setApartment(Integer apartment) { this.apartment = apartment; }
+    public Long getDefaultMoveDate() {
+        return defaultMoveDate;
+    }
+
+    public void setDefaultMoveDate(Long defaultMoveDate) {
+        this.defaultMoveDate = defaultMoveDate;
+    }
+
+
+    //delete if not use on gemini code
+    private Long nextMoveDate;
+    public Long getNextMoveDate() { return nextMoveDate; }
+    public void setNextMoveDate(Long nextMoveDate) { this.nextMoveDate = nextMoveDate; }
 }
