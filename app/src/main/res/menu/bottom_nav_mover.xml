@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_my_deliveries"
+        android:title="ההובלות שלי"
+        android:icon="@android:drawable/ic_menu_compass" />
+
+    <item
+        android:id="@+id/nav_chats"
+        android:title="צ׳אטים"
+        android:icon="@android:drawable/sym_action_chat" />
+
+</menu>
