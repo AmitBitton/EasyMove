@@ -14,3 +14,11 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Ignore Firebase config
+google-services.json
+# Ignore signing keys (very important)
+*.jks
+*.keystore
+
+# Ignore iOS Firebase file (if ever added by mistake)
+GoogleService-Info.plist

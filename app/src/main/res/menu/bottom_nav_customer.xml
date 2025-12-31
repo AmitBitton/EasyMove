@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_my_move"
+        android:icon="@drawable/ic_home"
+        android:title="המעבר שלי" />
+
+    <item
+        android:id="@+id/nav_search_move"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="חיפוש הובלה" />
+
+    <item
+        android:id="@+id/nav_chats"
+        android:icon="@android:drawable/sym_action_chat"
+        android:title="צ'אטים" />
+</menu>
