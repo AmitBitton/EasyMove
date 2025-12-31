@@ -21,26 +21,25 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
-import com.example.easymove.adapters.MoversAdapter;
 import com.example.easymove.model.UserProfile;
-import com.example.easymove.viewmodel.ChatViewModel; // הוספנו את ה-ViewModel החדש
+import com.example.easymove.adapters.MoversAdapter; // Use the new MoverAdapter
 import com.example.easymove.viewmodel.UserViewModel;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
+import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
-public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMoverActionClickListener {
+public class SearchMoverFragment extends Fragment {
 
     private UserViewModel userViewModel;
-    private ChatViewModel chatViewModel; // משתנה לניהול הצ'אט
-    private MoversAdapter adapter;
-
+    private MoversAdapter adapter; // Updated Adapter class
     private TextView tvSource, tvDest;
     private Button btnSearch;
 
@@ -50,6 +49,7 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
     private boolean hasSearched = false;
     private boolean isSelectingSource = true;
 
+    // Place Picker Launcher
     private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -70,25 +70,52 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // 1. Initialize Google Places
         if (!Places.isInitialized()) {
             Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
         }
 
-        // אתחול ה-ViewModels
+        // 2. Initialize ViewModel
         userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
-        chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class); // אתחול ChatViewModel
 
+        // 3. Initialize Views
         tvSource = view.findViewById(R.id.tvSourceResult);
         tvDest = view.findViewById(R.id.tvDestResult);
         btnSearch = view.findViewById(R.id.btnSearchAction);
-
         RecyclerView recycler = view.findViewById(R.id.recyclerMovers);
+
+        // 4. Setup RecyclerView & Adapter with new Listener Logic
         recycler.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        adapter = new MoversAdapter(this);
+        adapter = new MoversAdapter(getContext(), new ArrayList<>(), new MoversAdapter.OnMoverActionClickListener() {
+            @Override
+            public void onChatClick(UserProfile mover) {
+                openChatWithMover(mover);
+            }
+
+            @Override
+            public void onDetailsClick(UserProfile mover) {
+                showMoverDetailsDialog(mover);
+            }
+
+            @Override
+            public void onReviewsClick(UserProfile mover) {
+                // Handle Reviews Click
+                Toast.makeText(getContext(), "צפייה בביקורות - יפותח בהמשך", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onReportClick(UserProfile mover) {
+                // Handle Report Click
+                Toast.makeText(getContext(), "דיווח נשלח לאדמין", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         recycler.setAdapter(adapter);
 
-        // מאזינים לכפתורים
+        recycler.setAdapter(adapter);
+
+        // 5. Setup Address Buttons
         view.findViewById(R.id.btnSourceAddress).setOnClickListener(v -> {
             isSelectingSource = true;
             openPlacePicker();
@@ -99,38 +126,23 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
             openPlacePicker();
         });
 
+        // 6. Setup Search Button
         btnSearch.setOnClickListener(v -> performSearch());
 
-        // --- האזנה לנתונים (Observers) ---
-
-        // 1. תוצאות חיפוש מובילים
+        // 7. Observe Data Changes
         userViewModel.getMoversListLiveData().observe(getViewLifecycleOwner(), movers -> {
-            adapter.setMovers(movers);
+            // Convert list if necessary or pass directly
+            // Assuming your ViewModel returns List<User> (or UserProfile that maps to User)
+            // If there's a mismatch, you might need a converter loop here.
+            // For now assuming compatibility:
+            adapter.updateList(movers);
+
             if (hasSearched && movers.isEmpty()) {
                 Toast.makeText(getContext(), "לא נמצאו מובילים ברדיוס הקרוב", Toast.LENGTH_LONG).show();
             }
         });
 
         userViewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), error -> {
-            if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
-        });
-
-        // 2. האזנה ליצירת צ'אט (ChatViewModel)
-        chatViewModel.getNavigateToChatId().observe(getViewLifecycleOwner(), chatId -> {
-            if (chatId != null) {
-                chatViewModel.onChatNavigated(); // איפוס כדי שלא יקפוץ שוב
-
-                // כרגע רק מציגים הודעה, בשלב הבא נפתח את מסך הצ'אט הממשי
-                Toast.makeText(getContext(), "צ'אט נוצר בהצלחה! ID: " + chatId, Toast.LENGTH_SHORT).show();
-
-                // מעבר ל-ChatActivity עם ה-ID
-                Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
-                intent.putExtra("CHAT_ID", chatId);
-                startActivity(intent);
-            }
-        });
-
-        chatViewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
             if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
         });
     }
@@ -155,41 +167,68 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
             destLatLng = place.getLatLng();
         }
 
+        // Enable search only if both locations are selected
         btnSearch.setEnabled(sourceLatLng != null && destLatLng != null);
     }
 
     private void performSearch() {
         if (sourceLatLng != null) {
             hasSearched = true;
-            adapter.setMovers(new ArrayList<>()); // איפוס הרשימה לחווי ויזואלי של טעינה
+            adapter.updateList(new ArrayList<>()); // Visual clear
             userViewModel.searchMoversByLocation(sourceLatLng);
         }
     }
 
-    // --- מימוש הלחיצות מהאדפטר ---
+    // --- Helper Logic for Actions ---
 
-    @Override
-    public void onChatClick(UserProfile mover) {
-        // קריאה ל-ViewModel ליצירת/פתיחת הצ'אט
-        chatViewModel.startChatWithMover(mover);
+    private void openChatWithMover(UserProfile mover) {
+        String currentUserId = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
+        String moverId = mover.getUserId(); // Make sure your model has getUid() or getId()
+
+        // Create Consistent Chat ID
+        String chatId;
+        if (currentUserId.compareTo(moverId) < 0) {
+            chatId = currentUserId + "_" + moverId;
+        } else {
+            chatId = moverId + "_" + currentUserId;
+        }
+
+        // Start Chat Activity
+        Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
+        intent.putExtra("CHAT_ID", chatId);
+        intent.putExtra("OTHER_USER_ID", moverId);
+        intent.putExtra("OTHER_USER_NAME", mover.getName());
+        intent.putExtra("OTHER_USER_IMAGE", mover.getProfileImageUrl());
+
+        // --- PASS THE ADDRESSES ---
+        // Make sure tvSource/tvDest are not null
+        String source = tvSource.getText().toString();
+        String dest = tvDest.getText().toString();
+
+        intent.putExtra("SOURCE_ADDRESS", source);
+        intent.putExtra("DEST_ADDRESS", dest);
+
+        // Optional: We can pass coordinates too if you want to save lat/lng
+        if (sourceLatLng != null) {
+            intent.putExtra("SOURCE_LAT", sourceLatLng.latitude);
+            intent.putExtra("SOURCE_LNG", sourceLatLng.longitude);
+        }
+        if (destLatLng != null) {
+            intent.putExtra("DEST_LAT", destLatLng.latitude);
+            intent.putExtra("DEST_LNG", destLatLng.longitude);
+        }
+        // -------------------------------
+
+        startActivity(intent);
     }
 
-    @Override
-    public void onDetailsClick(UserProfile mover) {
+    private void showMoverDetailsDialog(UserProfile mover) {
+        // Simple dialog to show details
         new android.app.AlertDialog.Builder(getContext())
                 .setTitle("על " + mover.getName())
+
                 .setMessage(mover.getAbout() != null ? mover.getAbout() : "אין מידע נוסף")
                 .setPositiveButton("סגור", null)
                 .show();
-    }
-
-    @Override
-    public void onReviewsClick(UserProfile mover) {
-        Toast.makeText(getContext(), "חלון ביקורות (ימומש בהמשך)", Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void onReportClick(UserProfile mover) {
-        Toast.makeText(getContext(), "דיווח על " + mover.getName() + " נשלח לאדמין", Toast.LENGTH_LONG).show();
     }
 }

@@ -31,6 +31,10 @@ public class Chat implements ChatListItem {
 
     // שדה עזר (לא נשמר במסד נתונים) לדעת מי "האני" הנוכחי באפליקציה
     private transient String currentUserId;
+    private String chatTitle;
+    private String chatImageUrl;
+    private String lastMessageText;
+    private long timestampLong;
 
     public Chat() {} // חובה לפיירבייס
 
@@ -44,36 +48,6 @@ public class Chat implements ChatListItem {
     @Override
     public String getId() {
         return id;
-    }
-
-    @Override
-    public long getTimestampLong() {
-        return lastUpdated != null ? lastUpdated.toDate().getTime() : 0;
-    }
-
-    @Override
-    public String getChatTitle() {
-        // אם אני משתמש 1, הצג לי את השם של משתמש 2, ולהפך
-        if (currentUserId != null && currentUserId.equals(user1Id)) {
-            return user2Name;
-        } else {
-            return user1Name;
-        }
-    }
-
-    @Override
-    public String getChatImageUrl() {
-        // אם אני משתמש 1, הצג לי את התמונה של משתמש 2, ולהפך
-        if (currentUserId != null && currentUserId.equals(user1Id)) {
-            return user2Image;
-        } else {
-            return user1Image;
-        }
-    }
-
-    @Override
-    public String getLastMessageText() {
-        return lastMessage != null ? lastMessage : "";
     }
 
     // --- Getters & Setters רגילים ---
@@ -117,4 +91,15 @@ public class Chat implements ChatListItem {
 
     public Long getCustomerConfirmedAt() { return customerConfirmedAt; }
     public void setCustomerConfirmedAt(Long customerConfirmedAt) { this.customerConfirmedAt = customerConfirmedAt; }
+    public String getChatTitle() { return chatTitle; }
+    public void setChatTitle(String chatTitle) { this.chatTitle = chatTitle; }
+
+    public String getChatImageUrl() { return chatImageUrl; }
+    public void setChatImageUrl(String chatImageUrl) { this.chatImageUrl = chatImageUrl; }
+
+    public String getLastMessageText() { return lastMessageText; }
+    public void setLastMessageText(String lastMessageText) { this.lastMessageText = lastMessageText; }
+
+    public long getTimestampLong() { return timestampLong; }
+    public void setTimestampLong(long timestampLong) { this.timestampLong = timestampLong; }
 }

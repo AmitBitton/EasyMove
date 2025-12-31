@@ -5,6 +5,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import com.example.easymove.model.MatchRequest;
 import com.example.easymove.model.UserProfile;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
@@ -203,27 +204,34 @@ public class UserRepository {
             return Tasks.forException(e);
         }
 
-        String fileName = "profile_" + uid + "_" + UUID.randomUUID();
-        Log.d(TAG, "uploadProfileImage: uploading image fileName = " + fileName);
+        // 1. Use a FIXED filename (profile_UID.jpg).
+        // This prevents "orphan" files and makes it easier to find.
+        String fileName = "profile_" + uid + ".jpg";
 
+        Log.d(TAG, "uploadProfileImage: uploading image " + fileName);
+
+        // 2. Use chained .child() calls for safety
         StorageReference ref = storage.getReference()
-                .child("profile_images/" + fileName);
+                .child("profile_images")
+                .child(fileName);
 
+        // 3. Upload and then get the URL
         return ref.putFile(imageUri)
                 .continueWithTask(task -> {
                     if (!task.isSuccessful()) {
-                        Log.e(TAG, "uploadProfileImage: upload failed", task.getException());
+                        Log.e(TAG, "PutFile failed", task.getException());
                         throw task.getException();
                     }
+                    // Upload succeeded, now ask for the URL
                     return ref.getDownloadUrl();
                 })
                 .continueWith(task -> {
                     if (!task.isSuccessful()) {
-                        Log.e(TAG, "uploadProfileImage: failed to get download URL", task.getException());
+                        Log.e(TAG, "GetDownloadUrl failed", task.getException());
                         throw task.getException();
                     }
                     String url = task.getResult().toString();
-                    Log.d(TAG, "uploadProfileImage: download URL = " + url);
+                    Log.d(TAG, "uploadProfileImage: success, url: " + url);
                     return url;
                 });
     }
@@ -308,5 +316,54 @@ public class UserRepository {
                 .addOnFailureListener(e ->
                         Log.e(TAG, "getAllCustomersExceptMe: failed to fetch customers", e)
                 );
+    }
+
+    // -----------------------------------------------------------
+    //  פונקציות לשידוך שותפים (Matchmaking)
+    // -----------------------------------------------------------
+
+    /**
+     * מביא את כל הלקוחות (Customers) כדי שנוכל לחפש ביניהם.
+     */
+    public Task<QuerySnapshot> getAllPotentialPartners() {
+        return db.collection("users")
+                .whereEqualTo("userType", "customer")
+                .get();
+    }
+
+    /**
+     * שליחת בקשת חברות למשתמש אחר.
+     */
+    public Task<Void> sendMatchRequest(String targetUserId) {
+        String myUid = uidOrThrow();
+
+        // קודם מביאים את השם שלי, כדי שיהיה כתוב יפה בבקשה
+        return getUserById(myUid).continueWithTask(task -> {
+            UserProfile myProfile = task.getResult();
+            String myName = (myProfile != null && myProfile.getName() != null) ? myProfile.getName() : "משתמש";
+
+            MatchRequest request = new MatchRequest(myUid, myName, targetUserId);
+
+            return db.collection("match_requests").add(request).continueWith(t -> null);
+        });
+    }
+
+    /**
+     * מביא את כל הבקשות שממתינות לי (סטטוס pending).
+     */
+    public Task<QuerySnapshot> getIncomingRequests() {
+        String myUid = uidOrThrow();
+        return db.collection("match_requests")
+                .whereEqualTo("toUserId", myUid)
+                .whereEqualTo("status", "pending")
+                .get();
+    }
+
+    /**
+     * עדכון סטטוס בקשה (אישור/דחייה).
+     */
+    public Task<Void> updateMatchRequestStatus(String requestId, String newStatus) {
+        return db.collection("match_requests").document(requestId)
+                .update("status", newStatus);
     }
 }

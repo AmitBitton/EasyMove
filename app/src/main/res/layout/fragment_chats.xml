@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="@color/screen_background">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerChatsList"
@@ -17,7 +17,7 @@
         android:text="אין צ'אטים פעילים"
         android:visibility="gone"
         android:textSize="18sp"
-        android:textColor="#757575"/>
+        android:textColor="@color/text_primary"/>
 
     <ProgressBar
         android:id="@+id/progressChats"

@@ -19,7 +19,6 @@ import com.example.easymove.R;
 import com.example.easymove.model.MoveRequest;
 import com.example.easymove.viewmodel.MyMoveViewModel;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -35,11 +34,8 @@ public class MyMoveFragment extends Fragment {
     private TextView textFrom, textTo, textDate;
     private Button btnViewItems, btnAddPartner;
     private MaterialButton btnCancelMove;
-    private FloatingActionButton fabEditMove;
 
-    public MyMoveFragment() {
-        // Required empty public constructor
-    }
+    public MyMoveFragment() { }
 
     @Nullable
     @Override
@@ -53,9 +49,18 @@ public class MyMoveFragment extends Fragment {
 
         viewModel = new ViewModelProvider(this).get(MyMoveViewModel.class);
 
-        // חיבור לרכיבי המסך
+        initViews(view);
+        setupButtons();
+        observeViewModel();
+
+        // טעינת הנתונים בכניסה למסך
+        viewModel.loadCurrentMove();
+    }
+
+    private void initViews(View view) {
         textNoMove = view.findViewById(R.id.textNoMove);
         cardMoveDetails = view.findViewById(R.id.cardMoveDetails);
+
         textFrom = view.findViewById(R.id.textFrom);
         textTo = view.findViewById(R.id.textTo);
         textDate = view.findViewById(R.id.textDate);
@@ -63,70 +68,120 @@ public class MyMoveFragment extends Fragment {
         btnViewItems = view.findViewById(R.id.btnViewItems);
         btnAddPartner = view.findViewById(R.id.btnAddPartner);
         btnCancelMove = view.findViewById(R.id.btnCancelMove);
-        fabEditMove = view.findViewById(R.id.fabEditMove);
+    }
 
-        // האזנה לשינויים במידע
+    private void observeViewModel() {
         viewModel.getCurrentMove().observe(getViewLifecycleOwner(), this::updateUI);
+
         viewModel.getErrorMsg().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
         });
-
-        // הגדרת כפתורים
-        setupButtons();
-
-        // טעינה ראשונית
-        viewModel.loadCurrentMove();
     }
 
     private void updateUI(MoveRequest move) {
         if (move == null) {
-            // מצב שאין הובלה
             textNoMove.setVisibility(View.VISIBLE);
             cardMoveDetails.setVisibility(View.GONE);
-            btnCancelMove.setVisibility(View.GONE);
-            fabEditMove.setVisibility(View.GONE);
-        } else {
-            // מצב שיש הובלה פעילה
-            textNoMove.setVisibility(View.GONE);
-            cardMoveDetails.setVisibility(View.VISIBLE);
-            btnCancelMove.setVisibility(View.VISIBLE);
-            fabEditMove.setVisibility(View.VISIBLE);
-
-            textFrom.setText("מ: " + move.getSourceAddress());
-            textTo.setText("ל: " + move.getDestAddress());
-
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-            textDate.setText("תאריך: " + sdf.format(new Date(move.getMoveDate())));
+            return;
         }
+
+        textNoMove.setVisibility(View.GONE);
+        cardMoveDetails.setVisibility(View.VISIBLE);
+
+        String source = (move.getSourceAddress() != null && !move.getSourceAddress().isEmpty())
+                ? move.getSourceAddress() : "טרם נבחרה כתובת";
+        String dest = (move.getDestAddress() != null && !move.getDestAddress().isEmpty())
+                ? move.getDestAddress() : "טרם נבחרה כתובת";
+
+        textFrom.setText(source);
+        textTo.setText(dest);
+
+        if (move.getMoveDate() > 0) {
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            textDate.setText(sdf.format(new Date(move.getMoveDate())));
+        } else {
+            textDate.setText("טרם נקבע תאריך");
+        }
+
+        checkIfMoveIsFinished(move);
     }
 
+//    private void setupButtons() {
+//        btnCancelMove.setOnClickListener(v -> {
+//            new AlertDialog.Builder(getContext())
+//                    .setTitle("ביטול הובלה")
+//                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?\nהיא תועבר להיסטוריה ותיפתח הובלה חדשה.")
+//                    .setPositiveButton("כן, בטל", (d, w) -> viewModel.cancelCurrentMove())
+//                    .setNegativeButton("לא", null)
+//                    .show();
+//        });
+//
+//        btnViewItems.setOnClickListener(v -> {
+//            getParentFragmentManager()
+//                    .beginTransaction()
+//                    .replace(R.id.fragmentContainer, new InventoryFragment())
+//                    .addToBackStack(null)
+//                    .commit();
+//        });
+//
+//        btnAddPartner.setOnClickListener(v ->
+//                Toast.makeText(getContext(), "פיצ'ר שותף להובלה יפתח בקרוב!", Toast.LENGTH_SHORT).show()
+//        );
+//    }
+
     private void setupButtons() {
+
+        // ביטול הובלה
         btnCancelMove.setOnClickListener(v -> {
             new AlertDialog.Builder(getContext())
                     .setTitle("ביטול הובלה")
-                    .setMessage("האם אתה בטוח שברצונך לבטל את ההובלה הנוכחית?")
+                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?\nהיא תועבר להיסטוריה ותיפתח הובלה חדשה.")
                     .setPositiveButton("כן, בטל", (d, w) -> viewModel.cancelCurrentMove())
                     .setNegativeButton("לא", null)
                     .show();
         });
 
+        // צפייה ברשומות
         btnViewItems.setOnClickListener(v -> {
-            // פתיחת מסך המלאי
             getParentFragmentManager()
                     .beginTransaction()
-                    .replace(R.id.fragmentContainer, new InventoryFragment()) // החלפת המסך
-                    .addToBackStack(null) // כדי שכפתור 'חזור' יחזיר למסך הקודם
+                    .replace(R.id.fragmentContainer, new InventoryFragment())
+                    .addToBackStack(null)
                     .commit();
         });
 
-        btnAddPartner.setOnClickListener(v -> {
-            // TODO: פתיחת מסך חיפוש שותף
-            Toast.makeText(getContext(), "כאן יפתח חיפוש שותף", Toast.LENGTH_SHORT).show();
-        });
 
-        fabEditMove.setOnClickListener(v -> {
-            // TODO: פתיחת מסך עריכה
-            Toast.makeText(getContext(), "עריכת הובלה", Toast.LENGTH_SHORT).show();
+        btnAddPartner.setOnClickListener(v -> {
+            // מעבר למסך חיפוש שותפים החדש
+            getParentFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.fragmentContainer, new PartnerMatchFragment())
+                    .addToBackStack(null) // כדי שכפתור חזור יעבוד
+                    .commit();
         });
+    }
+
+    private void checkIfMoveIsFinished(MoveRequest move) {
+        if ("CONFIRMED".equals(move.getStatus())) {
+            long now = System.currentTimeMillis();
+            if (move.getMoveDate() > 0 && move.getMoveDate() < now) {
+                showCompletionDialog();
+            }
+        }
+    }
+
+    private void showCompletionDialog() {
+        new AlertDialog.Builder(getContext())
+                .setTitle("האם ההובלה הסתיימה?")
+                .setMessage("ראינו שתאריך ההובלה עבר. האם המעבר בוצע בהצלחה?")
+                .setCancelable(false)
+                .setPositiveButton("כן, הכל עבר בשלום ✅", (dialog, which) -> {
+                    viewModel.markMoveAsCompleted();
+                    Toast.makeText(getContext(), "מזל טוב! ההובלה עברה לארכיון.", Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("לא, ההובלה נדחתה", (dialog, which) -> {
+                    Toast.makeText(getContext(), "עדכני תאריך חדש דרך האזור האישי.", Toast.LENGTH_LONG).show();
+                })
+                .show();
     }
 }

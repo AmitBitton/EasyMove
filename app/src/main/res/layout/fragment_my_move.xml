@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:text="אין הובלה פעילה כרגע"
         android:textSize="20sp"
-        android:textColor="@android:color/darker_gray"
+        android:textColor="@color/text_primary"
         android:visibility="visible"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -27,6 +27,7 @@
         android:layout_height="wrap_content"
         app:cardCornerRadius="12dp"
         app:cardElevation="6dp"
+		app:cardBackgroundColor="@color/card_background"
         android:visibility="gone"
         tools:visibility="visible"
         app:layout_constraintTop_toTopOf="parent"
@@ -71,12 +72,12 @@
                 android:text="תאריך: 01/01/2025"
                 android:textSize="16sp"
                 android:layout_marginTop="8dp"
-                android:textColor="#555"/>
+                android:textColor="@color/text_primary"/>
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="#EEE"
+                android:background="@color/screen_background"
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="16dp"/>
 
@@ -103,7 +104,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="בטל הובלה"
-        android:textColor="@android:color/white"
+        android:textColor="@color/text_primary"
         android:backgroundTint="#D32F2F"
         android:visibility="gone"
         app:icon="@android:drawable/ic_delete"

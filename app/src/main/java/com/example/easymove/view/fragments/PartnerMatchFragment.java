@@ -4,9 +4,8 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout; // הוספנו
-import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SearchView;
@@ -14,107 +13,200 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.example.easymove.R;
 import com.example.easymove.adapters.IncomingRequestAdapter;
 import com.example.easymove.adapters.PotentialPartnerAdapter;
 import com.example.easymove.model.MatchRequest;
 import com.example.easymove.viewmodel.PartnerMatchViewModel;
 
+/**
+ * PartnerMatchFragment
+ * --------------------
+ * Handles the partner-matching feature of the application.
+ *
+ * Responsibilities:
+ * - Display a searchable list of potential partners
+ * - Display incoming match requests
+ * - Allow sending, approving, and rejecting match requests
+ * - Observe and react to ViewModel state changes (MVVM architecture)
+ *
+ * Data is provided by {@link PartnerMatchViewModel}.
+ */
 public class PartnerMatchFragment extends Fragment {
 
+    /** ViewModel that manages partner matching logic */
     private PartnerMatchViewModel viewModel;
-    private RecyclerView rvPotential, rvIncoming;
-    // מחקנו את tvIncomingTitle כי הוא עכשיו בתוך ה-Layout הכללי
+
+    /** RecyclerView for potential partners list */
+    private RecyclerView rvPotential;
+
+    /** RecyclerView for incoming match requests */
+    private RecyclerView rvIncoming;
+
+    /** SearchView for filtering potential partners */
     private SearchView searchView;
+
+    /** Adapter for potential partners list */
     private PotentialPartnerAdapter partnerAdapter;
+
+    /** Adapter for incoming requests list */
     private IncomingRequestAdapter requestAdapter;
 
+    /**
+     * Inflates the fragment layout.
+     */
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_partner_match, container, false);
+    public View onCreateView(
+            @NonNull LayoutInflater inflater,
+            ViewGroup container,
+            Bundle savedInstanceState
+    ) {
+        return inflater.inflate(
+                R.layout.fragment_partner_match,
+                container,
+                false
+        );
     }
 
+    /**
+     * Called after the fragment view has been created.
+     * Initializes ViewModel, views, adapters, observers, and listeners.
+     */
     @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    public void onViewCreated(
+            @NonNull View view,
+            @Nullable Bundle savedInstanceState
+    ) {
         super.onViewCreated(view, savedInstanceState);
 
-        viewModel = new ViewModelProvider(this).get(PartnerMatchViewModel.class);
+        // ---- ViewModel Initialization ----
+        viewModel = new ViewModelProvider(this)
+                .get(PartnerMatchViewModel.class);
 
-        // אתחול Views
+        // ---- View Binding ----
         rvPotential = view.findViewById(R.id.rvPotentialPartners);
         rvIncoming = view.findViewById(R.id.rvIncomingRequests);
         searchView = view.findViewById(R.id.searchViewPartners);
 
+        // ---- Setup RecyclerViews and Adapters ----
         setupAdapters();
-        observeViewModel(); // <--- כאן מתבצעת ההאזנה
 
-        // מאזין לחיפוש
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                viewModel.searchPartners(query);
-                return false;
-            }
+        // ---- Observe LiveData from ViewModel ----
+        observeViewModel();
 
-            @Override
-            public boolean onQueryTextChange(String newText) {
-                viewModel.searchPartners(newText);
-                return false;
-            }
-        });
+        // ---- Search Listener ----
+        // Triggers filtering in real time as the user types
+        searchView.setOnQueryTextListener(
+                new SearchView.OnQueryTextListener() {
 
-        // טעינה ראשונית
+                    @Override
+                    public boolean onQueryTextSubmit(String query) {
+                        viewModel.searchPartners(query);
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onQueryTextChange(String newText) {
+                        viewModel.searchPartners(newText);
+                        return false;
+                    }
+                }
+        );
+
+        // ---- Initial Data Load ----
         viewModel.loadData();
     }
 
+    /**
+     * Initializes RecyclerView adapters and their interaction callbacks.
+     */
     private void setupAdapters() {
-        // רשימת חיפוש
+
+        // ---- Potential Partners Adapter ----
+        // Sends a match request when invite button is clicked
         partnerAdapter = new PotentialPartnerAdapter(user -> {
             viewModel.sendRequest(user);
         });
-        rvPotential.setLayoutManager(new LinearLayoutManager(getContext()));
+
+        rvPotential.setLayoutManager(
+                new LinearLayoutManager(getContext())
+        );
         rvPotential.setAdapter(partnerAdapter);
 
-        // רשימת בקשות נכנסות
-        requestAdapter = new IncomingRequestAdapter(new IncomingRequestAdapter.OnActionListener() {
-            @Override
-            public void onApprove(MatchRequest request) {
-                viewModel.approveRequest(request);
-            }
+        // ---- Incoming Requests Adapter ----
+        // Handles approve and reject actions
+        requestAdapter =
+                new IncomingRequestAdapter(
+                        new IncomingRequestAdapter.OnActionListener() {
 
-            @Override
-            public void onReject(MatchRequest request) {
-                viewModel.rejectRequest(request);
-            }
-        });
-        rvIncoming.setLayoutManager(new LinearLayoutManager(getContext()));
+                            @Override
+                            public void onApprove(MatchRequest request) {
+                                viewModel.approveRequest(request);
+                            }
+
+                            @Override
+                            public void onReject(MatchRequest request) {
+                                viewModel.rejectRequest(request);
+                            }
+                        }
+                );
+
+        rvIncoming.setLayoutManager(
+                new LinearLayoutManager(getContext())
+        );
         rvIncoming.setAdapter(requestAdapter);
     }
 
+    /**
+     * Observes LiveData objects from the ViewModel and updates the UI accordingly.
+     */
     private void observeViewModel() {
-        viewModel.getPotentialPartners().observe(getViewLifecycleOwner(), users -> {
-            partnerAdapter.setUsers(users);
-        });
 
-        // --- הנה החלק ששאלת עליו (תיקנתי אותו שיעבוד) ---
-        viewModel.getIncomingRequests().observe(getViewLifecycleOwner(), requests -> {
-            // משתמשים ב-getView() כדי למצוא את ה-Layout בתוך הפרגמנט
-            View layoutIncoming = getView().findViewById(R.id.layoutIncoming);
+        // ---- Potential Partners Observer ----
+        viewModel.getPotentialPartners()
+                .observe(
+                        getViewLifecycleOwner(),
+                        users -> partnerAdapter.setUsers(users)
+                );
 
-            if (layoutIncoming != null) { // בדיקת בטיחות
-                if (requests != null && !requests.isEmpty()) {
-                    layoutIncoming.setVisibility(View.VISIBLE); // מציגים את הבלוק
-                    requestAdapter.setRequests(requests);
-                } else {
-                    layoutIncoming.setVisibility(View.GONE); // מסתירים
-                }
-            }
-        });
-        // --------------------------------------------------
+        // ---- Incoming Requests Observer ----
+        // Shows or hides the entire "Incoming Requests" section
+        viewModel.getIncomingRequests()
+                .observe(
+                        getViewLifecycleOwner(),
+                        requests -> {
 
-        viewModel.getToastMessage().observe(getViewLifecycleOwner(), msg -> {
-            if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
-        });
+                            // Find the container layout that wraps the incoming requests block
+                            View layoutIncoming =
+                                    getView().findViewById(R.id.layoutIncoming);
+
+                            if (layoutIncoming != null) {
+                                if (requests != null && !requests.isEmpty()) {
+                                    layoutIncoming.setVisibility(View.VISIBLE);
+                                    requestAdapter.setRequests(requests);
+                                } else {
+                                    layoutIncoming.setVisibility(View.GONE);
+                                }
+                            }
+                        }
+                );
+
+        // ---- Toast Messages Observer ----
+        // Used for feedback messages (success / error)
+        viewModel.getToastMessage()
+                .observe(
+                        getViewLifecycleOwner(),
+                        msg -> {
+                            if (msg != null) {
+                                Toast.makeText(
+                                        getContext(),
+                                        msg,
+                                        Toast.LENGTH_SHORT
+                                ).show();
+                            }
+                        }
+                );
     }
 }

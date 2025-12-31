@@ -44,6 +44,8 @@ import java.util.List;
 
 public class ProfileFragment extends Fragment {
 
+    private android.net.Uri imageUri;
+    private Uri tempCameraUri = null;
     private UserViewModel viewModel;
     private UserProfile currentUserProfile;
 
@@ -52,7 +54,6 @@ public class ProfileFragment extends Fragment {
     private TextView labelFromAddress, labelToAddress;
 
     private ImageView imageProfile;
-    private Button buttonChangeImage;
     private EditText editName;
     private EditText editPhone;
     private TextView textUserType;
@@ -91,9 +92,7 @@ public class ProfileFragment extends Fragment {
     private TextView labelMoverBaseAddress;
     private TextView tvMoverBaseAddress;
 
-    private Uri selectedImageUri = null;
-    private ActivityResultLauncher<String> pickImageLauncher;
-
+    private final Uri selectedImageUri = null;
     private enum AddressPickType { FROM, TO, MOVER }
     private AddressPickType currentPickType = AddressPickType.MOVER;
 
@@ -116,7 +115,6 @@ public class ProfileFragment extends Fragment {
             result -> {
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                     Place place = Autocomplete.getPlaceFromIntent(result.getData());
-                    if (place == null) return;
 
                     if (currentPickType == AddressPickType.MOVER) {
                         updateMoverLocation(place);
@@ -128,6 +126,35 @@ public class ProfileFragment extends Fragment {
                 }
             }
     );
+
+    private final ActivityResultLauncher<String> galleryLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            uri -> {
+                if (uri != null) {
+                    handleImageResult(uri);
+                }
+            }
+    );
+
+    private final ActivityResultLauncher<Uri> cameraLauncher = registerForActivityResult(
+            new ActivityResultContracts.TakePicture(),
+            success -> {
+                if (success) {
+                    handleImageResult(tempCameraUri);
+                }
+            }
+    );
+
+    // 3. Permission Launcher (Asks user for Camera permission)
+    private final ActivityResultLauncher<String> requestPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    // Permission granted! Now open the camera
+                    openCamera();
+                } else {
+                    Toast.makeText(getContext(), "נדרשת הרשאת מצלמה כדי לצלם תמונה", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     public ProfileFragment() { }
 
@@ -157,7 +184,6 @@ public class ProfileFragment extends Fragment {
         profileScroll = view.findViewById(R.id.profile_scroll);
 
         imageProfile = view.findViewById(R.id.image_profile);
-        buttonChangeImage = view.findViewById(R.id.button_change_image);
         editName = view.findViewById(R.id.edit_name);
         editPhone = view.findViewById(R.id.edit_phone);
         textUserType = view.findViewById(R.id.text_user_type);
@@ -199,28 +225,28 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupListeners() {
-        pickImageLauncher = registerForActivityResult(
-                new ActivityResultContracts.GetContent(),
-                uri -> {
-                    if (uri != null) {
-                        selectedImageUri = uri;
-                        imageProfile.setImageURI(uri);
-                        viewModel.uploadProfileImage(uri);
-                    }
-                }
-        );
+        // 1. Click on the profile image to open the Camera/Gallery dialog
+        imageProfile.setOnClickListener(v -> {
+            if (isEditMode) {
+                showImageSourceDialog();
+            } else {
+                Toast.makeText(getContext(), "יש לעבור למצב עריכה כדי לשנות תמונה", Toast.LENGTH_SHORT).show();
+            }
+        });
 
-        buttonChangeImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-
+        // 2. Edit Button
         buttonEdit.setOnClickListener(v -> enterEditMode());
 
+        // 3. Save Button
         buttonSave.setOnClickListener(v -> {
             saveProfileFromUi();
             exitEditMode();
         });
 
+        // 4. Cancel Button
         buttonCancel.setOnClickListener(v -> cancelEditMode());
 
+        // 5. Address Pickers
         btnPickFromAddress.setOnClickListener(v -> {
             currentPickType = AddressPickType.FROM;
             openPlacePicker();
@@ -236,6 +262,7 @@ public class ProfileFragment extends Fragment {
             openPlacePicker();
         });
 
+        // 6. Radius Slider
         sliderRadius.addOnChangeListener((slider, value, fromUser) -> {
             if (!fromUser) return;
             int radius = (int) value;
@@ -416,16 +443,17 @@ public class ProfileFragment extends Fragment {
     }
 
     private boolean hasStreetNumber(@Nullable Place place) {
-        if (place == null) return false;
+        if (place == null) return true;
         AddressComponents comps = place.getAddressComponents();
-        if (comps == null) return false;
+        if (comps == null) return true;
 
         for (AddressComponent c : comps.asList()) {
-            if (c.getTypes() != null && c.getTypes().contains("street_number")) {
-                return true;
+            c.getTypes();
+            if (c.getTypes().contains("street_number")) {
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     private void updateCustomerFromAddress(Place place) {
@@ -435,7 +463,7 @@ public class ProfileFragment extends Fragment {
         if (address == null || address.isEmpty()) return;
 
         // לקוח: חובה מספר בית
-        if (!hasStreetNumber(place)) {
+        if (hasStreetNumber(place)) {
             Toast.makeText(getContext(), "בחרי כתובת מלאה עם מספר בית", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -451,7 +479,7 @@ public class ProfileFragment extends Fragment {
         if (address == null || address.isEmpty()) return;
 
         // לקוח: חובה מספר בית
-        if (!hasStreetNumber(place)) {
+        if (hasStreetNumber(place)) {
             Toast.makeText(getContext(), "בחרי כתובת מלאה עם מספר בית", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -641,5 +669,69 @@ public class ProfileFragment extends Fragment {
         }
 
         exitEditMode();
+    }
+
+    // --- Helper Methods for Image Selection ---
+
+    private void showImageSourceDialog() {
+        String[] options = {"מצלמה", "גלריה"};
+
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(requireContext());
+        builder.setTitle("בחר מקור תמונה");
+        builder.setItems(options, (dialog, which) -> {
+            if (which == 0) {
+                // Option 1: Camera -> CHECK PERMISSION FIRST
+                if (androidx.core.content.ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA)
+                        == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    // We already have permission -> Open Camera
+                    openCamera();
+                } else {
+                    // We don't have permission -> Ask for it
+                    requestPermissionLauncher.launch(android.Manifest.permission.CAMERA);
+                }
+            } else {
+                // Option 2: Gallery (Does not require runtime permission for the picker)
+                galleryLauncher.launch("image/*");
+            }
+        });
+        builder.show();
+    }
+
+    private Uri createTempImageUri() {
+        try {
+            String fileName = "profile_pic_" + System.currentTimeMillis() + ".jpg";
+            java.io.File tempFile = new java.io.File(requireContext().getExternalFilesDir(null), fileName);
+
+            // This must match the 'authorities' line in AndroidManifest.xml
+            String authority = requireContext().getPackageName() + ".fileprovider";
+
+            return androidx.core.content.FileProvider.getUriForFile(
+                    requireContext(),
+                    authority,
+                    tempFile
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private void handleImageResult(Uri uri) {
+        // Set image to view
+        imageProfile.setImageURI(uri); // Or use Glide here if you prefer
+
+        // Upload to Firebase using your ViewModel
+        if (viewModel != null) {
+            viewModel.uploadProfileImage(uri);
+        }
+    }
+
+    private void openCamera() {
+        tempCameraUri = createTempImageUri();
+        if (tempCameraUri != null) {
+            cameraLauncher.launch(tempCameraUri);
+        } else {
+            Toast.makeText(getContext(), "שגיאה ביצירת קובץ לתמונה", Toast.LENGTH_SHORT).show();
+        }
     }
 }

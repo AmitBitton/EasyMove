@@ -13,33 +13,48 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * ChatViewModel
+ * -------------
+ * ViewModel responsible for managing chat-related data between the UI and the repository layer.
+ *
+ * Responsibilities:
+ * - Creating or retrieving existing chats with a mover
+ * - Loading all chats for the current user
+ * - Exposing LiveData for UI to observe:
+ *   - Navigation to chat screen
+ *   - Loading state
+ *   - Error messages
+ *   - List of user chats
+ */
 public class ChatViewModel extends ViewModel {
 
     private final ChatRepository chatRepository = new ChatRepository();
-    private final UserRepository userRepository = new UserRepository(); // נצטרך את זה כדי לדעת מי "אני"
+    private final UserRepository userRepository = new UserRepository(); // To get current user profile
 
-    // משתנים לניווט ושגיאות
+    // --- LiveData variables for UI communication ---
     private final MutableLiveData<String> navigateToChatId = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
-
-    // משתנה לרשימת הצ'אטים (עבור מסך ChatsFragment)
     private final MutableLiveData<List<Chat>> userChats = new MutableLiveData<>();
 
-    // --- Getters ---
+    // --- Getters for UI observation ---
     public LiveData<String> getNavigateToChatId() { return navigateToChatId; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
     public LiveData<Boolean> getIsLoading() { return isLoading; }
     public LiveData<List<Chat>> getUserChatsLiveData() { return userChats; }
 
     /**
-     * פונקציה שנקראת כשלוחצים על "צור קשר" בכרטיס מוביל
-     * יוצרת צ'אט חדש או מחזירה ID של צ'אט קיים
+     * Starts a chat with a selected mover.
+     * If a chat already exists between the current user and the mover, returns existing chat ID.
+     * Otherwise, creates a new chat and returns its ID.
+     *
+     * @param mover The mover profile to start a chat with
      */
     public void startChatWithMover(UserProfile mover) {
         isLoading.setValue(true);
 
-        // שלב 1: קבלת הפרופיל שלי (הלקוח)
+        // Step 1: Get current user profile (customer)
         userRepository.getMyProfile().addOnSuccessListener(myProfile -> {
             if (myProfile == null) {
                 isLoading.setValue(false);
@@ -47,11 +62,11 @@ public class ChatViewModel extends ViewModel {
                 return;
             }
 
-            // שלב 2: יצירת הצ'אט או קבלת הקיים
+            // Step 2: Create new chat or retrieve existing one
             chatRepository.getOrCreateChat(myProfile, mover)
                     .addOnSuccessListener(chatId -> {
                         isLoading.setValue(false);
-                        navigateToChatId.setValue(chatId); // זה יגרום למעבר מסך
+                        navigateToChatId.setValue(chatId); // Notify UI to navigate to chat
                     })
                     .addOnFailureListener(e -> {
                         isLoading.setValue(false);
@@ -65,19 +80,20 @@ public class ChatViewModel extends ViewModel {
     }
 
     /**
-     * פונקציה שנקראת במסך "הצ'אטים שלי" (ChatsFragment)
-     * טוענת את כל השיחות הפתוחות של המשתמש
+     * Loads all chats for the current user.
+     * Updates LiveData `userChats` with the list of chats.
      */
     public void loadUserChats() {
         isLoading.setValue(true);
 
-        // קודם משיגים את ה-ID שלי כדי לדעת את מי לחפש
+        // Step 1: Get current user profile
         userRepository.getMyProfile().addOnSuccessListener(myProfile -> {
             if (myProfile == null) {
                 isLoading.setValue(false);
                 return;
             }
 
+            // Step 2: Retrieve chats for this user from ChatRepository
             chatRepository.getUserChats(myProfile.getUserId())
                     .addOnSuccessListener(querySnapshot -> {
                         List<Chat> chats = new ArrayList<>();
@@ -85,13 +101,13 @@ public class ChatViewModel extends ViewModel {
                             for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                                 Chat chat = doc.toObject(Chat.class);
                                 if (chat != null) {
-                                    // חשוב! מגדירים מי "אני" כדי שהמודל ידע איזה שם להציג (של השני)
+                                    // Mark the current user in the chat object so UI can display the other party's name
                                     chat.setCurrentUserId(myProfile.getUserId());
                                     chats.add(chat);
                                 }
                             }
                         }
-                        userChats.setValue(chats);
+                        userChats.setValue(chats); // Update LiveData for UI
                         isLoading.setValue(false);
                     })
                     .addOnFailureListener(e -> {
@@ -104,7 +120,10 @@ public class ChatViewModel extends ViewModel {
         });
     }
 
-    // איפוס הניווט אחרי שהשתמשנו בו (כדי שלא יקפוץ שוב כשחוזרים למסך)
+    /**
+     * Resets the navigation LiveData after navigation has occurred.
+     * Prevents duplicate navigation events when returning to the fragment.
+     */
     public void onChatNavigated() {
         navigateToChatId.setValue(null);
     }

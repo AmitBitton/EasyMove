@@ -12,6 +12,7 @@ import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.SetOptions;
 
+import java.util.Arrays;
 import java.util.List;
 
 public class MoveRepository {
@@ -24,40 +25,124 @@ public class MoveRepository {
         return auth.getCurrentUser() != null ? auth.getCurrentUser().getUid() : null;
     }
 
+    // --- UPDATED: Confirm Move with Address & Date ---
+    public Task<Void> confirmMoveByCustomer(String chatId, String moverId, String customerId,
+                                            String sourceAddress, String destAddress, long moveDate) {
+
+        // CRITICAL CHANGE: Use 'chatId' as the document ID, not 'customerId'.
+        // This allows the customer to have multiple moves in their history (one per chat).
+        DocumentReference moveRef = db.collection(COLLECTION).document(chatId);
+        DocumentReference chatRef = db.collection("chats").document(chatId);
+
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot chatSnap = transaction.get(chatRef);
+            if (!chatSnap.exists()) {
+                throw new FirebaseFirestoreException("Chat not found", FirebaseFirestoreException.Code.ABORTED);
+            }
+
+            Boolean moverConfirmed = chatSnap.getBoolean("moverConfirmed");
+            if (moverConfirmed == null || !moverConfirmed) {
+                throw new FirebaseFirestoreException("Mover has not confirmed yet", FirebaseFirestoreException.Code.ABORTED);
+            }
+
+            // 1. Update Chat Status
+            transaction.update(chatRef,
+                    "customerConfirmed", true,
+                    "customerConfirmedAt", System.currentTimeMillis()
+            );
+
+            // 2. Create/Update the Move Document
+            MoveRequest move = new MoveRequest();
+            move.setId(chatId);
+            move.setChatId(chatId);
+            move.setCustomerId(customerId);
+            move.setMoverId(moverId);
+            move.setStatus("CONFIRMED"); // Initial status
+            move.setConfirmed(true);
+            move.setCreatedAt(System.currentTimeMillis());
+
+            // --- SAVE THE NEW DATA ---
+            move.setSourceAddress(sourceAddress);
+            move.setDestAddress(destAddress);
+            move.setMoveDate(moveDate); // Saves as Number (Long)
+            // -------------------------
+
+            // Use 'set' with merge to avoid overwriting unrelated fields if they exist
+            transaction.set(moveRef, move, SetOptions.merge());
+
+            return null;
+        });
+    }
+
     /**
-     * מביא את ההובלה ה"פעילה" של הלקוח.
-     * הנחה: ללקוח יש רק הובלה אחת פעילה בסטטוס OPEN בו זמנית.
+     * מביא את ההובלה הפעילה של הלקוח הספציפי.
+     * מקבל את ה-customerId כפרמטר ליציבות.
      */
-    public Task<MoveRequest> getCurrentActiveMove() {
-        String uid = getCurrentUserId();
-        if (uid == null) return Tasks.forException(new Exception("No user logged in"));
+    public Task<MoveRequest> getCurrentActiveMove(String customerId) {
+        if (customerId == null) return Tasks.forException(new Exception("Customer ID is null"));
+
+        List<String> activeStatuses = Arrays.asList("OPEN", "CONFIRMED");
 
         return db.collection(COLLECTION)
-                .whereEqualTo("customerId", uid)
-                .whereEqualTo("status", "OPEN") // רק הובלות פתוחות
-                .limit(1) // לוקחים את הראשונה
+                .whereEqualTo("customerId", customerId)
+                .whereIn("status", activeStatuses)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(1)
                 .get()
                 .continueWith(task -> {
                     if (!task.isSuccessful()) throw task.getException();
+
                     QuerySnapshot snapshot = task.getResult();
                     if (snapshot != null && !snapshot.isEmpty()) {
-                        MoveRequest move = snapshot.getDocuments().get(0).toObject(MoveRequest.class);
-                        if (move != null) move.setId(snapshot.getDocuments().get(0).getId());
+                        DocumentSnapshot doc = snapshot.getDocuments().get(0);
+                        MoveRequest move = doc.toObject(MoveRequest.class);
+                        if (move != null) move.setId(doc.getId());
                         return move;
                     }
-                    return null; // אין הובלה פעילה
+                    return null;
                 });
     }
 
-    // ביטול הובלה
-    public Task<Void> cancelMove(String customerId) {
-        DocumentReference moveRef = db.collection(COLLECTION).document(customerId);
+    /**
+     * הפונקציה החכמה ליצירת הובלה.
+     * מחליפה את הטרנזקציה הלא-חוקית בשרשרת פעולות (Chain).
+     */
+    public Task<MoveRequest> ensureActiveMoveForCustomer(String customerId) {
+        // שלב 1: בודקים אם קיימת הובלה פעילה
+        return getCurrentActiveMove(customerId).continueWithTask(task -> {
+            MoveRequest existingMove = task.getResult();
 
-        return moveRef.update(
-                "status", "OPEN",
-                "confirmed", false,
-                "moverId", null,
-                "chatId", null
+            // אם מצאנו פעילה -> מחזירים אותה וזהו
+            if (existingMove != null) {
+                return Tasks.forResult(existingMove);
+            }
+
+            // שלב 2: אם לא מצאנו -> יוצרים חדשה
+            DocumentReference newRef = db.collection(COLLECTION).document();
+
+            MoveRequest move = new MoveRequest();
+            move.setId(newRef.getId());
+            move.setCustomerId(customerId);
+            move.setStatus("OPEN");
+            move.setConfirmed(false);
+            move.setCreatedAt(System.currentTimeMillis());
+            move.setMoverId(null);
+            move.setChatId(null);
+
+            return newRef.set(move).continueWith(t -> {
+                if (!t.isSuccessful()) throw t.getException();
+                return move; // מחזירים את האובייקט החדש שנוצר
+            });
+        });
+    }
+
+    /**
+     * ביטול הובלה
+     */
+    public Task<Void> cancelMove(String moveId) {
+        return db.collection(COLLECTION).document(moveId).update(
+                "status", "CANCELED",
+                "confirmed", false
         );
     }
 
@@ -165,5 +250,14 @@ public class MoveRepository {
             return moveRef.set(move);
         });
     }
+
+    /**
+     * סיום הובלה
+     */
+    public Task<Void> completeMove(String moveId) {
+        return db.collection(COLLECTION).document(moveId).update("status", "COMPLETED");
+    }
+
+
 
 }

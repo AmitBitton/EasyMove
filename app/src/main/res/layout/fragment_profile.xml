@@ -24,25 +24,31 @@
             android:textSize="22sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
-
-        <ImageView
-            android:id="@+id/image_profile"
-            android:layout_width="120dp"
-            android:layout_height="120dp"
-            android:layout_gravity="center_horizontal"
-            android:src="@mipmap/ic_launcher_round"
-            android:scaleType="centerCrop"
-            android:background="@android:color/darker_gray"
-            android:contentDescription="תמונת פרופיל"
-            android:layout_marginBottom="8dp" />
-
-        <Button
-            android:id="@+id/button_change_image"
+		
+		<FrameLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="שינוי תמונה"
             android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="24dp">
+
+            <ImageView
+                android:id="@+id/image_profile"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:src="@mipmap/ic_launcher_round"
+                android:background="@drawable/circle_bg_gray"
+                android:scaleType="centerCrop"
+                android:contentDescription="תמונת פרופיל"/>
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@android:drawable/ic_menu_camera"
+                android:background="@drawable/circle_bg_gray"
+                android:padding="6dp"
+                android:layout_gravity="bottom|end"
+                app:tint="#000000"/>
+        </FrameLayout>
 
         <TextView
             android:layout_width="wrap_content"
