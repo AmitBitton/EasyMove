@@ -38,17 +38,14 @@ public class InventoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 1. אתחול ViewModel
         viewModel = new ViewModelProvider(this, ViewModelFactoryProvider.factory).get(InventoryViewModel.class);
 
-        // 2. הגדרת רשימה
         RecyclerView recyclerView = view.findViewById(R.id.recyclerInventory);
         textEmpty = view.findViewById(R.id.textEmptyInventory);
         FloatingActionButton fab = view.findViewById(R.id.fabAddItem);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        // יצירת Adapter (השתמשנו בזה שיצרת קודם)
         adapter = new InventoryAdapter(new InventoryAdapter.OnItemClickListener() {
             @Override
             public void onDeleteClick(InventoryItem item) {
@@ -67,23 +64,36 @@ public class InventoryFragment extends Fragment {
         });
         recyclerView.setAdapter(adapter);
 
-        // 3. האזנה לנתונים
         viewModel.getInventoryList().observe(getViewLifecycleOwner(), items -> {
             adapter.setItems(items);
-            textEmpty.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+            textEmpty.setVisibility(items == null || items.isEmpty() ? View.VISIBLE : View.GONE);
         });
 
         viewModel.getToastMessage().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
         });
 
-        // 4. כפתור הוספה
         fab.setOnClickListener(v -> {
             AddItemDialogFragment dialog = new AddItemDialogFragment();
             dialog.show(getChildFragmentManager(), "AddItemDialog");
         });
+    }
 
-        // טעינה ראשונית
-        viewModel.loadMyInventory();
+    // ✅ חדש: מתחילים להאזין כשנכנסים למסך (זה המקום הנכון ל-listener)
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (viewModel != null) {
+            viewModel.startInventoryListener();
+        }
+    }
+
+    // ✅ חדש: עוצרים את ההאזנה כשעוזבים את המסך
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (viewModel != null) {
+            viewModel.stopInventoryListener();
+        }
     }
 }

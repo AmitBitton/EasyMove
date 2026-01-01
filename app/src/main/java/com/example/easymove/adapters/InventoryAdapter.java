@@ -6,11 +6,14 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.bumptech.glide.Glide;
 import com.example.easymove.R;
 import com.example.easymove.model.InventoryItem;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,7 +39,8 @@ public class InventoryAdapter extends RecyclerView.Adapter<InventoryAdapter.View
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_inventory_card, parent, false);
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_inventory_card, parent, false);
         return new ViewHolder(view);
     }
 
@@ -48,9 +52,24 @@ public class InventoryAdapter extends RecyclerView.Adapter<InventoryAdapter.View
         holder.tvRoom.setText("חדר: " + item.getRoomType());
         holder.tvQuantity.setText("כמות: " + item.getQuantity());
 
-        holder.tvFragile.setVisibility(item.isFragile() ? View.VISIBLE : View.GONE);
+        // ✅ תיאור פריט
+        String desc = item.getDescription(); // אם אצלך זה getDesc() תחליפי כאן
+        if (desc != null && !desc.trim().isEmpty()) {
+            holder.tvDescription.setText(desc.trim());
+            holder.tvDescription.setVisibility(View.VISIBLE);
+        } else {
+            holder.tvDescription.setVisibility(View.GONE);
+        }
 
-        // טעינת תמונה עם Glide
+        // ✅ שביר
+        if (item.isFragile()) {
+            holder.tvFragile.setText("שביר");
+            holder.tvFragile.setVisibility(View.VISIBLE);
+        } else {
+            holder.tvFragile.setVisibility(View.GONE);
+        }
+
+        // תמונה
         if (item.getImageUrl() != null && !item.getImageUrl().isEmpty()) {
             Glide.with(holder.itemView.getContext())
                     .load(item.getImageUrl())
@@ -70,7 +89,7 @@ public class InventoryAdapter extends RecyclerView.Adapter<InventoryAdapter.View
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvName, tvRoom, tvQuantity, tvFragile;
+        TextView tvName, tvRoom, tvQuantity, tvFragile, tvDescription;
         ImageView ivImage;
         ImageButton btnDelete;
 
@@ -80,6 +99,10 @@ public class InventoryAdapter extends RecyclerView.Adapter<InventoryAdapter.View
             tvRoom = itemView.findViewById(R.id.tvItemRoom);
             tvQuantity = itemView.findViewById(R.id.tvItemQuantity);
             tvFragile = itemView.findViewById(R.id.tvItemFragile);
+
+            // ✅ חדש
+            tvDescription = itemView.findViewById(R.id.tvItemDescription);
+
             ivImage = itemView.findViewById(R.id.ivItemImage);
             btnDelete = itemView.findViewById(R.id.btnDeleteItem);
         }

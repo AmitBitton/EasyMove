@@ -36,6 +36,15 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
+            <!-- תיאור הפריט -->
+            <TextView
+                android:id="@+id/tvItemDescription"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="תיאור הפריט"
+                android:textColor="#616161"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/tvItemRoom"
                 android:layout_width="wrap_content"
@@ -57,7 +66,7 @@
                 android:text="⚠️ שביר"
                 android:textColor="#D32F2F"
                 android:textStyle="bold"
-                android:visibility="gone"/>
+                android:visibility="gone" />
         </LinearLayout>
 
         <ImageButton
@@ -66,6 +75,6 @@
             android:layout_height="wrap_content"
             android:src="@android:drawable/ic_menu_delete"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:tint="#D32F2F" />
+            app:tint="#D32F2F" />
     </LinearLayout>
 </androidx.cardview.widget.CardView>
