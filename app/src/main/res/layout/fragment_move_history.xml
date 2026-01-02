@@ -1,13 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:orientation="vertical"
+    android:background="#F5F5F5"
+    android:padding="16dp"
+    android:layoutDirection="rtl">
 
-    <!-- בינתיים מסך ריק עם טקסט -->
     <TextView
+        android:text="היסטוריית הובלות"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <ProgressBar
+        android:id="@+id/progressBarHistory"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="היסטוריית הובלות (בפיתוח)"
-        android:textSize="18sp" />
-</FrameLayout>
+        android:layout_gravity="center"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/tvEmptyHistory"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="אין הובלות קודמות להצגה"
+        android:gravity="center"
+        android:textSize="18sp"
+        android:textColor="#757575"
+        android:layout_marginTop="50dp"
+        android:visibility="gone"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerHistory"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+</LinearLayout>

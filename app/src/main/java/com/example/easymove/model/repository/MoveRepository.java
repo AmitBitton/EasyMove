@@ -144,6 +144,39 @@ public class MoveRepository {
         });
     }
 
+    /**
+     * מביא היסטוריה בצורה חכמה - גם ללקוח וגם למוביל.
+     * ממיין לפי תאריך ההובלה בפועל.
+     */
+    public Task<List<MoveRequest>> getMoveHistory(String uid, String userType) {
+        // קביעת השדה לחיפוש לפי סוג המשתמש
+        String fieldName = "mover".equals(userType) ? "moverId" : "customerId";
+
+        // רשימת הסטטוסים להיסטוריה (רק מה שנגמר)
+        List<String> historyStatuses = Arrays.asList("COMPLETED", "CANCELED");
+
+        return db.collection(COLLECTION)
+                .whereEqualTo(fieldName, uid)
+                .whereIn("status", historyStatuses)
+                .orderBy("moveDate", Query.Direction.DESCENDING) // שיפור: מיון לפי תאריך ההובלה
+                .get()
+                .continueWith(task -> {
+                    if (!task.isSuccessful()) throw task.getException();
+
+                    List<MoveRequest> moves = new java.util.ArrayList<>();
+                    if (task.getResult() != null) {
+                        for (DocumentSnapshot doc : task.getResult()) {
+                            MoveRequest move = doc.toObject(MoveRequest.class);
+                            if (move != null) {
+                                move.setId(doc.getId());
+                                moves.add(move);
+                            }
+                        }
+                    }
+                    return moves;
+                });
+    }
+
     public Task<List<MoveRequest>> getMoverConfirmedMoves(String moverId) {
         return db.collection(COLLECTION)
                 .whereEqualTo("moverId", moverId)
