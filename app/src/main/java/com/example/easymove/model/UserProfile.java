@@ -3,130 +3,74 @@ package com.example.easymove.model;
 import java.util.List;
 
 /**
- * UserProfile – represents a user profile in the EasyMove app.
- *
- * There are two user types:
- *  - "customer" – user who orders a move
- *  - "mover"    – user who provides moving services
- *
- * The same model is used for both types.
- * Fields that are not relevant for a specific type can remain null.
+ * UserProfile
+ * מייצג משתמש (לקוח או מוביל).
+ * משמש כמקור האמת (Source of Truth) לכתובות ברירת מחדל ולתאריך מועדף.
  */
 public class UserProfile {
 
-    /* -----------------------  General user fields  ----------------------- */
-
-    private String userId;            // Firebase user ID
-    private String name;              // Full name
-    private String phone;             // Phone number
+    /* -----------------------  פרטים אישיים  ----------------------- */
+    private String userId;
+    private String name;
+    private String phone;
     private String userType;          // "customer" or "mover"
-    private String profileImageUrl;   // Profile image URL stored in Firebase Storage
+    private String profileImageUrl;
 
-    /* -----------------------  Default move addresses  ----------------------- */
+    /* -----------------------  שדות ללקוח (Customer)  ----------------------- */
+    // כתובות טקסטואליות (מה שהמשתמש רואה)
+    private String defaultFromAddress;
+    private String defaultToAddress;
 
-    // Textual addresses chosen by the user (optional)
-    private String defaultFromAddress;  // Default origin address (where the move starts)
-    private String defaultToAddress;    // Default destination address (where the move ends)
+    // קואורדינטות לכתובות הלקוח (לחישוב מרחקים עתידי)
+    private Double fromLat;
+    private Double fromLng;
+    private Double toLat;
+    private Double toLng;
 
-    // Coordinates for integration with Google Maps (optional but useful)
+    // פרטי דירה
+    private Integer floor;
+    private Integer apartment;
+
+    // ✅ התאריך הקובע! סנכרון מול ההובלה הפעילה
+    private Long defaultMoveDate;
+
+    /* -----------------------  שדות למוביל (Mover)  ----------------------- */
+    // מיקום בסיס של המוביל (לחיפוש גיאוגרפי)
     private String geohash;
     private double lat;
     private double lng;
 
-    private double distanceFromUser;
+    // רדיוס שירות
+    private int serviceRadiusKm = 30;
 
-    private int serviceRadiusKm = 30; // Default service radius is 30 kilometers
-
-
-
-    private Double fromLat;             // Latitude for default origin
-    private Double fromLng;             // Longitude for default origin
-    private Double toLat;               // Latitude for default destination
-    private Double toLng;               // Longitude for default destination
-
-    /* -----------------------  Mover-specific fields  ----------------------- */
-
-    // List of areas where the mover works, e.g. ["Center", "Jerusalem"]
+    // אזורי שירות (טקסט)
     private List<String> serviceAreas;
 
-    // Professional description – shown only for movers
+    // אודות ודירוג
     private String about;
+    private float rating;
+    private int ratingCount;
 
-    // Rating data for movers (0 if no ratings yet)
-    private float rating;              // Average rating value
-    private int ratingCount;           // Number of ratings received
-    private Integer floor;       // קומה אופציונלית
-    private Integer apartment;    // דירה אופציונלית
+    // טוקן להתראות
+    private String fcmToken;
 
-    // Default move date for the customer (editable only from Profile)
-    private Long defaultMoveDate; // can be null / 0
-    /* -----------------------  Empty constructor for Firebase  ----------------------- */
+    // שדה עזר (לא נשמר במסד, מחושב בזמן ריצה למיון)
+    private double distanceFromUser;
 
-    public UserProfile() {
-        // Required empty constructor for Firestore deserialization
-    }
+    /* -----------------------  Constructors  ----------------------- */
 
-    /* -----------------------  Full constructor (optional to use)  ----------------------- */
+    public UserProfile() { } // חובה לפיירבייס
 
-    public UserProfile(String userId,
-                       String name,
-                       String phone,
-                       String userType,
-                       String profileImageUrl,
-                       String defaultFromAddress,
-                       String defaultToAddress,
-                       Double fromLat,
-                       Double fromLng,
-                       Double toLat,
-                       Double toLng,
-                       List<String> serviceAreas,
-                       String about,
-                       float rating,
-                       int ratingCount) {
+    /* -----------------------  Getters & Setters  ----------------------- */
 
-        this.userId = userId;
-        this.name = name;
-        this.phone = phone;
-        this.userType = userType;
-        this.profileImageUrl = profileImageUrl;
-
-        this.defaultFromAddress = defaultFromAddress;
-        this.defaultToAddress = defaultToAddress;
-
-        this.fromLat = fromLat;
-        this.fromLng = fromLng;
-        this.toLat = toLat;
-        this.toLng = toLng;
-
-        this.serviceAreas = serviceAreas;
-        this.about = about;
-
-        this.rating = rating;
-        this.ratingCount = ratingCount;
-    }
-
-    /* -----------------------  Getters & setters  ----------------------- */
-
-    public String getGeohash() { return geohash; }
-    public void setGeohash(String geohash) { this.geohash = geohash; }
-
-    public double getLat() { return lat; }
-    public void setLat(double lat) { this.lat = lat; }
-
-    public double getLng() { return lng; }
-    public void setLng(double lng) { this.lng = lng; }
-
-    public double getDistanceFromUser() { return distanceFromUser; }
-    public void setDistanceFromUser(double distanceFromUser) { this.distanceFromUser = distanceFromUser; }
-
-    public int getServiceRadiusKm() { return serviceRadiusKm; }
-    public void setServiceRadiusKm(int serviceRadiusKm) { this.serviceRadiusKm = serviceRadiusKm; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
+    public String getFcmToken() { return fcmToken; }
+    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
 
@@ -136,6 +80,7 @@ public class UserProfile {
     public String getProfileImageUrl() { return profileImageUrl; }
     public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
 
+    // --- לקוח ---
     public String getDefaultFromAddress() { return defaultFromAddress; }
     public void setDefaultFromAddress(String defaultFromAddress) { this.defaultFromAddress = defaultFromAddress; }
 
@@ -154,6 +99,28 @@ public class UserProfile {
     public Double getToLng() { return toLng; }
     public void setToLng(Double toLng) { this.toLng = toLng; }
 
+    public Integer getFloor() { return floor; }
+    public void setFloor(Integer floor) { this.floor = floor; }
+
+    public Integer getApartment() { return apartment; }
+    public void setApartment(Integer apartment) { this.apartment = apartment; }
+
+    public Long getDefaultMoveDate() { return defaultMoveDate; }
+    public void setDefaultMoveDate(Long defaultMoveDate) { this.defaultMoveDate = defaultMoveDate; }
+
+    // --- מוביל ---
+    public String getGeohash() { return geohash; }
+    public void setGeohash(String geohash) { this.geohash = geohash; }
+
+    public double getLat() { return lat; }
+    public void setLat(double lat) { this.lat = lat; }
+
+    public double getLng() { return lng; }
+    public void setLng(double lng) { this.lng = lng; }
+
+    public int getServiceRadiusKm() { return serviceRadiusKm; }
+    public void setServiceRadiusKm(int serviceRadiusKm) { this.serviceRadiusKm = serviceRadiusKm; }
+
     public List<String> getServiceAreas() { return serviceAreas; }
     public void setServiceAreas(List<String> serviceAreas) { this.serviceAreas = serviceAreas; }
 
@@ -166,22 +133,6 @@ public class UserProfile {
     public int getRatingCount() { return ratingCount; }
     public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
 
-    public Integer getFloor() { return floor; }
-    public void setFloor(Integer floor) { this.floor = floor; }
-
-    public Integer getApartment() { return apartment; }
-    public void setApartment(Integer apartment) { this.apartment = apartment; }
-    public Long getDefaultMoveDate() {
-        return defaultMoveDate;
-    }
-
-    public void setDefaultMoveDate(Long defaultMoveDate) {
-        this.defaultMoveDate = defaultMoveDate;
-    }
-
-
-    //delete if not use on gemini code
-    private Long nextMoveDate;
-    public Long getNextMoveDate() { return nextMoveDate; }
-    public void setNextMoveDate(Long nextMoveDate) { this.nextMoveDate = nextMoveDate; }
+    public double getDistanceFromUser() { return distanceFromUser; }
+    public void setDistanceFromUser(double distanceFromUser) { this.distanceFromUser = distanceFromUser; }
 }

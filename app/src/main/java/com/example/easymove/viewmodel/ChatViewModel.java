@@ -1,148 +1,171 @@
-package com.example.easymove.viewmodel; // ViewModels
+package com.example.easymove.viewmodel;
 
-import androidx.lifecycle.LiveData; // נתונים נצפים
-import androidx.lifecycle.MutableLiveData; // LiveData שניתן לשנות
-import androidx.lifecycle.ViewModel; // בסיס ל-ViewModel
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.ViewModel;
 
-import com.example.easymove.model.Chat; // מודל צ'אט
-import com.example.easymove.model.UserProfile; // מודל משתמש
-import com.example.easymove.model.repository.ChatRepository; // ריפו לצ'אטים
-import com.example.easymove.model.repository.UserRepository; // ריפו למשתמשים
-import com.google.firebase.firestore.DocumentSnapshot; // מסמך מהמסד
+import com.example.easymove.model.Chat;
+import com.example.easymove.model.Message;
+import com.example.easymove.model.UserProfile;
+import com.example.easymove.model.repository.ChatRepository;
+import com.example.easymove.model.repository.MoveRepository;
+import com.example.easymove.model.repository.UserRepository;
+import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
-import java.util.ArrayList; // רשימה
-import java.util.List; // ממשק רשימה
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 public class ChatViewModel extends ViewModel {
 
     private final ChatRepository chatRepository = new ChatRepository();
-    // ריפו שמדבר עם Firestore על "chats"
-
+    private final MoveRepository moveRepository = new MoveRepository();
     private final UserRepository userRepository = new UserRepository();
-    // ריפו שמחזיר את הפרופיל שלי, כדי לדעת מי אני ומה ה-UID שלי
 
-    // משתנים לניווט ושגיאות
+    // --- LiveData לשיחה בודדת (ChatActivity) ---
+    private final MutableLiveData<List<Message>> messagesLiveData = new MutableLiveData<>();
+    private final MutableLiveData<Chat> chatMetadataLiveData = new MutableLiveData<>();
+
+    // --- LiveData לרשימת הצ'אטים (ChatsFragment) - התיקון שלך כאן ---
+    private final MutableLiveData<List<Chat>> userChatsLiveData = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
+
+    // --- LiveData כלליים ---
     private final MutableLiveData<String> navigateToChatId = new MutableLiveData<>();
-    // משמש לניווט למסך צ'אט: כשהוא מקבל ערך -> ה-UI יכול לפתוח ChatActivity
-
+    private final MutableLiveData<String> toastMessage = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
-    // שומר הודעת שגיאה להצגה ב-Toast/דיאלוג
 
-    private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
-    // מציין האם יש טעינה כרגע (להציג progress)
-
-    // משתנה לרשימת הצ'אטים (עבור מסך ChatsFragment)
-    private final MutableLiveData<List<Chat>> userChats = new MutableLiveData<>();
-    // רשימת הצ'אטים שלי להצגה במסך
+    // מחזיקי האזנה
+    private ListenerRegistration messagesListener;
+    private ListenerRegistration chatMetadataListener;
 
     // --- Getters ---
+    public LiveData<List<Message>> getMessages() { return messagesLiveData; }
+    public LiveData<Chat> getChatMetadata() { return chatMetadataLiveData; }
+    public LiveData<List<Chat>> getUserChatsLiveData() { return userChatsLiveData; } // ✅ הוספנו
+    public LiveData<Boolean> getIsLoading() { return isLoading; } // ✅ הוספנו
     public LiveData<String> getNavigateToChatId() { return navigateToChatId; }
-    // מחזיר LiveData לניווט
-
+    public LiveData<String> getToastMessage() { return toastMessage; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
-    // מחזיר LiveData לשגיאות
 
-    public LiveData<Boolean> getIsLoading() { return isLoading; }
-    // מחזיר LiveData לטעינה
-
-    public LiveData<List<Chat>> getUserChatsLiveData() { return userChats; }
-    // מחזיר LiveData לרשימת צ'אטים
-
-    /**
-     * פונקציה שנקראת כשלוחצים על "צור קשר" בכרטיס מוביל
-     * יוצרת צ'אט חדש או מחזירה ID של צ'אט קיים
-     */
-    public void startChatWithMover(UserProfile mover) {
-        // קלט: mover = פרופיל המובילה/מוביל שאליו פונים
-        // פלט: אין ישיר, אבל מעדכן navigateToChatId או errorMessage
-
-        isLoading.setValue(true); // מתחילים טעינה
-
-        // שלב 1: קבלת הפרופיל שלי (הלקוח)
-        userRepository.getMyProfile().addOnSuccessListener(myProfile -> {
-            // הצלחה: קיבלנו פרופיל שלי
-            if (myProfile == null) {
-                // אם מסיבה כלשהי אין פרופיל
-                isLoading.setValue(false);
-                errorMessage.setValue("שגיאה בזיהוי המשתמש");
-                return;
-            }
-
-            // שלב 2: יצירת הצ'אט או קבלת הקיים
-            chatRepository.getOrCreateChat(myProfile, mover)
-                    .addOnSuccessListener(chatId -> {
-                        // הצלחה: יש לנו chatId
-                        isLoading.setValue(false);
-                        navigateToChatId.setValue(chatId); // ה-UI ישתמש בזה כדי לעבור למסך
-                    })
-                    .addOnFailureListener(e -> {
-                        // כישלון: שמים הודעת שגיאה
-                        isLoading.setValue(false);
-                        errorMessage.setValue("שגיאה ביצירת צ'אט: " + e.getMessage());
-                    });
-
-        }).addOnFailureListener(e -> {
-            // כישלון בהבאת הפרופיל שלי
-            isLoading.setValue(false);
-            errorMessage.setValue("נכשל בטעינת הפרופיל שלי");
-        });
+    public String getCurrentUserId() {
+        return moveRepository.getCurrentUserId();
     }
 
-    /**
-     * פונקציה שנקראת במסך "הצ'אטים שלי" (ChatsFragment)
-     * טוענת את כל השיחות הפתוחות של המשתמש
-     */
+    // =================================================================
+    //  לוגיקה לרשימת הצ'אטים (ChatsFragment) ✅
+    // =================================================================
     public void loadUserChats() {
-        // קלט: אין (מביא לפי המשתמשת המחוברת)
-        // פלט: אין ישיר, אבל מעדכן userChats / errorMessage / isLoading
+        String myId = getCurrentUserId();
+        if (myId == null) return;
 
-        isLoading.setValue(true); // מתחילים טעינה
-
-        // קודם משיגים את ה-ID שלי כדי לדעת את מי לחפש
-        userRepository.getMyProfile().addOnSuccessListener(myProfile -> {
-            if (myProfile == null) {
-                // אם אין פרופיל - מפסיקים
-                isLoading.setValue(false);
-                return;
-            }
-
-            chatRepository.getUserChats(myProfile.getUserId())
-                    .addOnSuccessListener(querySnapshot -> {
-                        // הצלחה: קיבלנו רשימת מסמכים
-                        List<Chat> chats = new ArrayList<>(); // רשימה שנבנה מהמסמכים
-
-                        if (querySnapshot != null) {
-                            for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                                // מעבר על כל המסמכים
-                                Chat chat = doc.toObject(Chat.class); // המרה ל-Chat
-                                if (chat != null) {
-                                    // חשוב! מגדירים מי "אני" כדי שהמודל ידע איזה שם להציג (של השני)
-                                    chat.setCurrentUserId(myProfile.getUserId());
-                                    chats.add(chat); // הוספה לרשימה
-                                }
-                            }
+        isLoading.setValue(true);
+        chatRepository.getUserChats(myId)
+                .addOnSuccessListener(querySnapshot -> {
+                    List<Chat> chats = new ArrayList<>();
+                    if (querySnapshot != null) {
+                        for (QueryDocumentSnapshot doc : querySnapshot) {
+                            Chat chat = doc.toObject(Chat.class);
+                            // הגדרת ה-ID הנוכחי כדי שהאדפטר ידע להציג את השם/תמונה הנכונים
+                            chat.setCurrentUserId(myId);
+                            chats.add(chat);
                         }
-
-                        userChats.setValue(chats); // מעדכנים LiveData -> המסך יתעדכן
-                        isLoading.setValue(false); // סיום טעינה
-                    })
-                    .addOnFailureListener(e -> {
-                        // כישלון בהבאת צ'אטים
-                        isLoading.setValue(false);
-                        errorMessage.setValue("שגיאה בטעינת צ'אטים");
-                    });
-
-        }).addOnFailureListener(e -> {
-            // כישלון בהבאת פרופיל
-            isLoading.setValue(false);
-            errorMessage.setValue("נכשל בטעינת פרופיל משתמש");
-        });
+                    }
+                    userChatsLiveData.setValue(chats);
+                    isLoading.setValue(false);
+                })
+                .addOnFailureListener(e -> {
+                    isLoading.setValue(false);
+                    errorMessage.setValue("שגיאה בטעינת צ'אטים: " + e.getMessage());
+                });
     }
 
-    // איפוס הניווט אחרי שהשתמשנו בו (כדי שלא יקפוץ שוב כשחוזרים למסך)
+    // =================================================================
+    //  לוגיקה ליצירת צ'אט (SearchMoverFragment)
+    // =================================================================
+
+    public void startChatWithMover(UserProfile mover) {
+        String myId = getCurrentUserId();
+        if (myId == null) {
+            errorMessage.setValue("משתמש לא מחובר");
+            return;
+        }
+
+        userRepository.getUserById(myId).addOnSuccessListener(me -> {
+            if (me == null) {
+                errorMessage.setValue("שגיאה בטעינת פרופיל משתמש");
+                return;
+            }
+            chatRepository.getOrCreateChat(me, mover)
+                    .addOnSuccessListener(chatId -> navigateToChatId.setValue(chatId))
+                    .addOnFailureListener(e -> errorMessage.setValue("שגיאה ביצירת צ'אט: " + e.getMessage()));
+        }).addOnFailureListener(e -> errorMessage.setValue("שגיאה בטעינת נתונים: " + e.getMessage()));
+    }
+
     public void onChatNavigated() {
-        // קלט: אין
-        // פלט: אין
-        navigateToChatId.setValue(null); // מאפס כדי למנוע ניווט חוזר
+        navigateToChatId.setValue(null);
+    }
+
+    // =================================================================
+    //  לוגיקה למסך הצ'אט עצמו (ChatActivity)
+    // =================================================================
+
+    public void startListening(String chatId) {
+        if (chatId == null) return;
+
+        if (messagesListener == null) {
+            messagesListener = chatRepository.listenToMessages(chatId, (value, error) -> {
+                if (error != null) return;
+                if (value != null) {
+                    List<Message> list = value.toObjects(Message.class);
+                    messagesLiveData.setValue(list);
+                }
+            });
+        }
+
+        if (chatMetadataListener == null) {
+            chatMetadataListener = chatRepository.listenToChatMetadata(chatId, (value, error) -> {
+                if (error != null || value == null || !value.exists()) return;
+                Chat chat = value.toObject(Chat.class);
+                if (chat != null) {
+                    chatMetadataLiveData.setValue(chat);
+                }
+            });
+        }
+    }
+
+    public void sendMessage(String chatId, String text, String senderId, String senderName) {
+        if (text == null || text.trim().isEmpty()) return;
+        Message message = new Message(senderId, senderName, text, new Timestamp(new Date()));
+        chatRepository.sendMessage(chatId, message);
+    }
+
+    public void confirmByMover(String chatId) {
+        chatRepository.setMoverConfirmed(chatId)
+                .addOnSuccessListener(v -> toastMessage.setValue("אישרת ✅ ממתין ללקוח"))
+                .addOnFailureListener(e -> toastMessage.setValue("שגיאה: " + e.getMessage()));
+    }
+
+    public void confirmByCustomer(String chatId, String moverId, String customerId) {
+        moveRepository.hasActiveConfirmedMove(customerId)
+                .addOnSuccessListener(hasActive -> {
+                    if (hasActive) {
+                        toastMessage.setValue("כבר קיימת הובלה פעילה - לא ניתן לאשר חדשה");
+                    } else {
+                        moveRepository.confirmMoveByCustomer(chatId, moverId, customerId)
+                                .addOnSuccessListener(v -> toastMessage.setValue("ההובלה תואמה בהצלחה!"))
+                                .addOnFailureListener(e -> toastMessage.setValue("שגיאה באישור: " + e.getMessage()));
+                    }
+                })
+                .addOnFailureListener(e -> toastMessage.setValue("שגיאה בבדיקת הובלות: " + e.getMessage()));
+    }
+
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        if (messagesListener != null) messagesListener.remove();
+        if (chatMetadataListener != null) chatMetadataListener.remove();
     }
 }

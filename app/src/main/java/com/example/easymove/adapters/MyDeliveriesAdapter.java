@@ -48,23 +48,28 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
         holder.tvSource.setText(move.getSourceAddress());
         holder.tvDest.setText(move.getDestAddress());
 
+        // --- לוגיקה נקייה לטקסט הסטטוס/תאריך ---
         if ("CONFIRMED".equals(move.getStatus())) {
-            long date = move.getMoveDate();
-
-            if (date > 0) {
+            // אם מאושר: מציגים תאריך בצבע רגיל/מודגש
+            if (move.getMoveDate() > 0) {
                 java.text.SimpleDateFormat sdf =
                         new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
-                holder.tvStatus.setText("תאריך: " + sdf.format(new java.util.Date(date)));
+                holder.tvStatus.setText("📅 לתאריך: " + sdf.format(new java.util.Date(move.getMoveDate())));
+                holder.tvStatus.setTextColor(android.graphics.Color.BLACK);
+                holder.tvStatus.setTypeface(null, android.graphics.Typeface.BOLD);
             } else {
                 holder.tvStatus.setText("ממתין לתאריך");
+                holder.tvStatus.setTextColor(android.graphics.Color.RED);
             }
         } else {
+            // אם לא מאושר: מציגים את הסטטוס (למשל OPEN)
             holder.tvStatus.setText(move.getStatus());
+            holder.tvStatus.setTextColor(android.graphics.Color.GRAY);
         }
 
-
-        // טעינת שם הלקוח
-        holder.tvCustomerName.setText("טוען שם לקוח...");
+        // --- הצגת שם הלקוח (במקום הכפתור הירוק הישן) ---
+        // וודא שב-XML (item_delivery_card) המיקום של tvCustomerName מתאים לך
+        holder.tvCustomerName.setText("טוען לקוח...");
         if (move.getCustomerId() != null) {
             userRepository.getUserNameById(move.getCustomerId())
                     .addOnSuccessListener(name -> {
@@ -73,6 +78,7 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
         }
 
         holder.btnChat.setOnClickListener(v -> listener.onChatClick(move));
+
         holder.btnDetails.setOnClickListener(v -> listener.onDetailsClick(move));
     }
 
