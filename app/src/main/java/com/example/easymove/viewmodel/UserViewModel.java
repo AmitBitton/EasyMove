@@ -179,14 +179,29 @@ public class UserViewModel extends ViewModel {
      */
     public void saveMoveDetails(String customerId, String source, String dest, long date) {
         isLoading.setValue(true);
-        moveRepository.updateMoveDraftDetails(customerId, source, dest, date)
-                .addOnSuccessListener(aVoid -> {
-                    isLoading.setValue(false);
-                    moveDetailsSaved.setValue(true);
-                })
-                .addOnFailureListener(e -> {
-                    isLoading.setValue(false);
-                    errorMessage.setValue("שמירה נכשלה: " + e.getMessage());
-                });
+
+        // 1. קודם שולפים את הפרופיל הנוכחי כדי לא לדרוס שדות אחרים
+        userRepository.getUserById(customerId).addOnSuccessListener(profile -> {
+            if (profile == null) {
+                // מקרה קצה: אין פרופיל (לא אמור לקרות אם המשתמש מחובר)
+                profile = new UserProfile();
+                profile.setUserId(customerId);
+                profile.setUserType("customer");
+            }
+
+            Log.d("DEBUG_SAVE", "Saving move details. Date: " + date);
+            // 2. מעדכנים את השדות בפרופיל
+            profile.setDefaultFromAddress(source);
+            profile.setDefaultToAddress(dest);
+            profile.setDefaultMoveDate(date);
+
+            // 3. קוראים לפונקציה הראשית ששומרת ומסנכרנת הכל
+            saveMyProfile(profile);
+            // הערה: saveMyProfile כבר מטפלת ב-isLoading וב-moveDetailsSaved
+
+        }).addOnFailureListener(e -> {
+            isLoading.setValue(false);
+            errorMessage.setValue("שגיאה בטעינת פרופיל לשמירה: " + e.getMessage());
+        });
     }
 }

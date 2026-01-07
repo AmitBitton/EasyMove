@@ -110,15 +110,70 @@ public class MoveRepository {
                 );
     }
 
+//    public Task<Void> cancelMoveAndResetChat(String moveId, String chatId, String customerId) {
+//        WriteBatch batch = db.batch();
+//
+//        DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+//        batch.update(moveRef,
+//                "status", "CANCELED",
+//                "confirmed", false
+//        );
+//
+//        if (chatId != null && !chatId.isEmpty()) {
+//            DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
+//            batch.update(chatRef,
+//                    "moverConfirmed", false,
+//                    "customerConfirmed", false,
+//                    "moverConfirmedAt", null,
+//                    "customerConfirmedAt", null
+//            );
+//        }
+//
+//        if (customerId != null) {
+//            DocumentReference userRef = db.collection("users").document(customerId);
+//            batch.update(userRef,
+//                    "defaultFromAddress", null,
+//                    "defaultToAddress", null,
+//                    "defaultMoveDate", 0,
+//                    "fromLat", null,
+//                    "fromLng", null,
+//                    "toLat", null,
+//                    "toLng", null
+//            );
+//        }
+//
+//        return batch.commit();
+//    }
+
+    /**
+     * ביטול הובלה + איפוס צ'אט (בטוח יותר)
+     */
     public Task<Void> cancelMoveAndResetChat(String moveId, String chatId, String customerId) {
+        // אנחנו מעדיפים לסמוך על chatId שהגיע מהקריאה, אבל ליתר ביטחון נבדוק אותו
+        if (chatId == null || chatId.isEmpty()) {
+            // אם אין לנו chatId, ננסה לשלוף אותו מהמסד קודם
+            return db.collection(COLLECTION_MOVES).document(moveId).get().continueWithTask(task -> {
+                if (task.isSuccessful() && task.getResult() != null) {
+                    String realChatId = task.getResult().getString("chatId");
+                    return performCancel(moveId, realChatId, customerId);
+                }
+                return performCancel(moveId, null, customerId);
+            });
+        }
+        return performCancel(moveId, chatId, customerId);
+    }
+
+    private Task<Void> performCancel(String moveId, String chatId, String customerId) {
         WriteBatch batch = db.batch();
 
+        // 1. ביטול ההובלה
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
         batch.update(moveRef,
                 "status", "CANCELED",
                 "confirmed", false
         );
 
+        // 2. איפוס הצ'אט
         if (chatId != null && !chatId.isEmpty()) {
             DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
             batch.update(chatRef,
@@ -129,6 +184,7 @@ public class MoveRepository {
             );
         }
 
+        // 3. איפוס פרופיל המשתמש
         if (customerId != null) {
             DocumentReference userRef = db.collection("users").document(customerId);
             batch.update(userRef,
@@ -145,8 +201,35 @@ public class MoveRepository {
         return batch.commit();
     }
 
-    public Task<Void> completeMove(String moveId) {
-        return db.collection(COLLECTION_MOVES).document(moveId).update("status", "COMPLETED");
+    /**
+     * סיום הובלה (ארכיון) + שחרור הצ'אט
+     */
+    public Task<Void> completeMove(String moveId) { // הסרתי את chatId מהחתימה כי נשלוף אותו מבפנים
+        return db.collection(COLLECTION_MOVES).document(moveId).get().continueWithTask(task -> {
+            String chatId = null;
+            if (task.isSuccessful() && task.getResult() != null) {
+                chatId = task.getResult().getString("chatId");
+            }
+
+            WriteBatch batch = db.batch();
+
+            // 1. סגירת ההובלה
+            DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+            batch.update(moveRef, "status", "COMPLETED");
+
+            // 2. שחרור הצ'אט
+            if (chatId != null && !chatId.isEmpty()) {
+                DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
+                batch.update(chatRef,
+                        "moverConfirmed", false,
+                        "customerConfirmed", false,
+                        "moverConfirmedAt", null,
+                        "customerConfirmedAt", null
+                );
+            }
+
+            return batch.commit();
+        });
     }
 
     public Task<Void> confirmMoveByCustomer(String chatId, String moverId, String customerId) {

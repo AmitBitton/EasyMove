@@ -1,7 +1,10 @@
 package com.example.easymove.view.fragments;
 
 import android.app.AlertDialog;
+import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,6 +20,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.example.easymove.R;
 import com.example.easymove.model.MoveRequest;
+import com.example.easymove.view.activities.ChatActivity;
 import com.example.easymove.viewmodel.MyMoveViewModel;
 import com.google.android.material.button.MaterialButton;
 
@@ -34,8 +38,11 @@ public class MyMoveFragment extends Fragment {
     private TextView textFrom, textTo, textDate;
     private Button btnViewItems, btnAddPartner;
     private MaterialButton btnCancelMove;
+    private MaterialButton btnChatWithMover;
 
-    public MyMoveFragment() { }
+    public MyMoveFragment() {
+        // Required empty public constructor
+    }
 
     @Nullable
     @Override
@@ -53,7 +60,7 @@ public class MyMoveFragment extends Fragment {
         setupButtons();
         observeViewModel();
 
-        // טעינת הנתונים בכניסה למסך
+        // טעינת הנתונים
         viewModel.loadCurrentMove();
     }
 
@@ -68,6 +75,7 @@ public class MyMoveFragment extends Fragment {
         btnViewItems = view.findViewById(R.id.btnViewItems);
         btnAddPartner = view.findViewById(R.id.btnAddPartner);
         btnCancelMove = view.findViewById(R.id.btnCancelMove);
+        btnChatWithMover = view.findViewById(R.id.btnChatWithMover);
     }
 
     private void observeViewModel() {
@@ -88,54 +96,60 @@ public class MyMoveFragment extends Fragment {
         textNoMove.setVisibility(View.GONE);
         cardMoveDetails.setVisibility(View.VISIBLE);
 
+        // 1. עדכון כתובות
         String source = (move.getSourceAddress() != null && !move.getSourceAddress().isEmpty())
-                ? move.getSourceAddress() : "טרם נבחרה כתובת";
+                ? move.getSourceAddress() : "כתובת מוצא חסרה";
         String dest = (move.getDestAddress() != null && !move.getDestAddress().isEmpty())
-                ? move.getDestAddress() : "טרם נבחרה כתובת";
+                ? move.getDestAddress() : "כתובת יעד חסרה";
 
         textFrom.setText(source);
         textTo.setText(dest);
 
+        // 2. עדכון תאריך (החלק שהיה חסר לך)
         if (move.getMoveDate() > 0) {
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-            textDate.setText(sdf.format(new Date(move.getMoveDate())));
+            try {
+                Date date = new Date(move.getMoveDate());
+                SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+                textDate.setText(sdf.format(date));
+                textDate.setTextColor(Color.BLACK); // וודא שזה שחור
+            } catch (Exception e) {
+                textDate.setText("שגיאה בתאריך");
+                Log.e("MyMoveFragment", "Date format error", e);
+            }
         } else {
             textDate.setText("טרם נקבע תאריך");
+            textDate.setTextColor(Color.RED);
         }
 
+        // 3. עדכון כפתור הצ'אט
+        if ("CONFIRMED".equals(move.getStatus()) && move.getChatId() != null && !move.getChatId().isEmpty()) {
+            btnChatWithMover.setVisibility(View.VISIBLE);
+        } else {
+            btnChatWithMover.setVisibility(View.GONE);
+        }
+
+        // בדיקה אם ההובלה עברה
         checkIfMoveIsFinished(move);
     }
 
-//    private void setupButtons() {
-//        btnCancelMove.setOnClickListener(v -> {
-//            new AlertDialog.Builder(getContext())
-//                    .setTitle("ביטול הובלה")
-//                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?\nהיא תועבר להיסטוריה ותיפתח הובלה חדשה.")
-//                    .setPositiveButton("כן, בטל", (d, w) -> viewModel.cancelCurrentMove())
-//                    .setNegativeButton("לא", null)
-//                    .show();
-//        });
-//
-//        btnViewItems.setOnClickListener(v -> {
-//            getParentFragmentManager()
-//                    .beginTransaction()
-//                    .replace(R.id.fragmentContainer, new InventoryFragment())
-//                    .addToBackStack(null)
-//                    .commit();
-//        });
-//
-//        btnAddPartner.setOnClickListener(v ->
-//                Toast.makeText(getContext(), "פיצ'ר שותף להובלה יפתח בקרוב!", Toast.LENGTH_SHORT).show()
-//        );
-//    }
-
     private void setupButtons() {
+        // כפתור צ'אט
+        btnChatWithMover.setOnClickListener(v -> {
+            MoveRequest move = viewModel.getCurrentMove().getValue();
+            if (move != null && move.getChatId() != null) {
+                Intent intent = new Intent(getContext(), ChatActivity.class);
+                intent.putExtra("CHAT_ID", move.getChatId());
+                startActivity(intent);
+            } else {
+                Toast.makeText(getContext(), "שגיאה בפרטי הצ'אט", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         // ביטול הובלה
         btnCancelMove.setOnClickListener(v -> {
             new AlertDialog.Builder(getContext())
                     .setTitle("ביטול הובלה")
-                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?\nהיא תועבר להיסטוריה ותיפתח הובלה חדשה.")
+                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?\n")
                     .setPositiveButton("כן, בטל", (d, w) -> viewModel.cancelCurrentMove())
                     .setNegativeButton("לא", null)
                     .show();
@@ -150,21 +164,22 @@ public class MyMoveFragment extends Fragment {
                     .commit();
         });
 
-
+        // ✅ התיקון: החזרנו את המעבר למסך שותפים (במקום ה-Toast)
         btnAddPartner.setOnClickListener(v -> {
-            // מעבר למסך חיפוש שותפים החדש
             getParentFragmentManager()
                     .beginTransaction()
-                    .replace(R.id.fragmentContainer, new PartnerMatchFragment())
-                    .addToBackStack(null) // כדי שכפתור חזור יעבוד
+                    // וודא שזה הנתיב הנכון לפרגמנט שלך, או תוסיף import למעלה
+                    .replace(R.id.fragmentContainer, new com.example.easymove.view.fragments.PartnerMatchFragment())
+                    .addToBackStack(null)
                     .commit();
         });
     }
 
     private void checkIfMoveIsFinished(MoveRequest move) {
-        if ("CONFIRMED".equals(move.getStatus())) {
+        if ("CONFIRMED".equals(move.getStatus()) && move.getMoveDate() > 0) {
             long now = System.currentTimeMillis();
-            if (move.getMoveDate() > 0 && move.getMoveDate() < now) {
+            // אם עבר יום מאז התאריך (סתם כדי לא להציק באותו רגע)
+            if (move.getMoveDate() < now - 86400000L) {
                 showCompletionDialog();
             }
         }
@@ -179,9 +194,7 @@ public class MyMoveFragment extends Fragment {
                     viewModel.markMoveAsCompleted();
                     Toast.makeText(getContext(), "מזל טוב! ההובלה עברה לארכיון.", Toast.LENGTH_LONG).show();
                 })
-                .setNegativeButton("לא, ההובלה נדחתה", (dialog, which) -> {
-                    Toast.makeText(getContext(), "עדכני תאריך חדש דרך האזור האישי.", Toast.LENGTH_LONG).show();
-                })
+                .setNegativeButton("לא, ההובלה נדחתה", null)
                 .show();
     }
 }

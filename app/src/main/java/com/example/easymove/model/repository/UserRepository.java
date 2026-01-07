@@ -12,12 +12,15 @@ import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -362,5 +365,36 @@ public class UserRepository {
     public Task<Void> updateMatchRequestStatus(String requestId, String newStatus) {
         return db.collection("match_requests").document(requestId)
                 .update("status", newStatus);
+    }
+
+    /**
+     * בדיקה אם ההתראות דלוקות (האם קיים טוקן למשתמש)
+     */
+    public Task<Boolean> isNotificationEnabled(String userId) {
+        return db.collection("users").document(userId).get()
+                .continueWith(task -> {
+                    if (task.isSuccessful() && task.getResult() != null) {
+                        String token = task.getResult().getString("fcmToken");
+                        return token != null && !token.isEmpty();
+                    }
+                    return false;
+                });
+    }
+
+    /**
+     * שמירת טוקן (הפעלת התראות)
+     */
+    public Task<Void> updateFcmToken(String userId, String token) {
+        return db.collection("users").document(userId)
+                .update("fcmToken", token);
+    }
+
+    /**
+     * מחיקת טוקן (כיבוי התראות)
+     */
+    public Task<Void> removeFcmToken(String userId) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("fcmToken", FieldValue.delete());
+        return db.collection("users").document(userId).update(updates);
     }
 }

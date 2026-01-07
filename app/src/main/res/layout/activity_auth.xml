@@ -103,22 +103,22 @@
                 android:textColor="#33691E"
                 android:layout_marginBottom="4dp"/>
 
-            <TextView
-                android:id="@+id/textSelectedAddressAuth"
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="לא נבחר מיקום"
-                android:padding="8dp"
-                android:background="#FFFFFF"
-                android:layout_marginBottom="8dp"/>
+                android:layout_height="wrap_content">
 
-            <Button
-                android:id="@+id/btnPickLocationAuth"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="לחץ לבחירת כתובת במפה"
-                android:textSize="12sp"
-                android:backgroundTint="#689F38"/>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editMoverAddress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="לחץ לבחירת כתובת"
+                    android:focusable="false"
+                    android:clickable="true"
+                    android:inputType="none"
+                    android:drawableEnd="@android:drawable/ic_menu_myplaces" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
         </LinearLayout>
 
         <Button

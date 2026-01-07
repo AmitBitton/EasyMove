@@ -101,6 +101,18 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"/>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnChatWithMover"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:text="צ'אט עם המוביל"
+                    android:textSize="16sp"
+                    android:backgroundTint="#009688"
+                    app:icon="@android:drawable/stat_notify_chat"
+                    app:iconGravity="textStart"
+                    android:visibility="gone"
+                    android:layout_marginBottom="12dp"/>
+
                 <Button
                     android:id="@+id/btnViewItems"
                     android:layout_width="match_parent"
