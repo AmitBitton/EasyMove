@@ -22,14 +22,11 @@ android {
         versionCode 1
         versionName "1.0"
 
+        // שים לב: זה הראנר הסטנדרטי
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        // הזרקת המפתח לתוך ה-Manifest
         manifestPlaceholders = [googleMapsApiKey: googleMapsKey]
-
-        // יצירת משתנה שאפשר להשתמש בו גם בקוד Java (למשל: BuildConfig.MAPS_KEY)
         buildConfigField "String", "MAPS_KEY", "\"${googleMapsKey}\""
-
     }
 
     buildTypes {
@@ -39,7 +36,6 @@ android {
         }
     }
 
-    // חובה כדי להשתמש ב-BuildConfig שנוצר למעלה
     buildFeatures {
         buildConfig true
     }
@@ -72,7 +68,31 @@ dependencies {
     implementation libs.firebase.auth
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
 
+    // ✅ התיקון ל-Firestore (Protobuf)
+    implementation 'com.google.protobuf:protobuf-javalite:3.25.1'
+    androidTestImplementation 'com.google.protobuf:protobuf-javalite:3.25.1'
+
+    // --- Unit Testing ---
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    testImplementation 'org.mockito:mockito-core:5.3.1'
+    testImplementation 'org.mockito:mockito-inline:5.2.0'
+    testImplementation 'org.robolectric:robolectric:4.10.3'
+    testImplementation 'androidx.arch.core:core-testing:2.2.0'
+
+    // --- ✅ התיקון הקריטי לאנדרואיד 14 (Espresso 3.6.1) ---
+    // חובה להשתמש בגרסאות האלו ב-API 34!
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test:runner:1.6.1'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-contrib:3.6.1'
+}
+
+// ✅ התיקון הסופי ל-Protobuf
+configurations.all {
+    resolutionStrategy {
+        force 'com.google.protobuf:protobuf-javalite:3.25.1'
+    }
 }

@@ -17,22 +17,27 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
+import java.util.Map; // הוספנו
+
 public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
-        // Check if message contains a notification payload.
+        // קבלת נתוני ההתראה (כותרת וגוף)
+        String title = "הודעה חדשה";
+        String body = "";
+
         if (remoteMessage.getNotification() != null) {
-            String title = remoteMessage.getNotification().getTitle();
-            String body = remoteMessage.getNotification().getBody();
-            sendNotification(title, body);
+            title = remoteMessage.getNotification().getTitle();
+            body = remoteMessage.getNotification().getBody();
         }
+
+        // ✅ קריאה לפונקציה עם המידע הנוסף (Data Payload)
+        sendNotification(title, body, remoteMessage.getData());
     }
 
     @Override
     public void onNewToken(@NonNull String token) {
-        // This runs if the token changes (e.g. app reinstall).
-        // We need to update Firestore with the new token.
         sendRegistrationToServer(token);
     }
 
@@ -45,11 +50,18 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         }
     }
 
-    private void sendNotification(String title, String messageBody) {
+    // ✅ הפונקציה המעודכנת שמקבלת גם את המפה של הנתונים
+    private void sendNotification(String title, String messageBody, Map<String, String> data) {
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
-        // PendingIntent for when the user taps the notification
+        // ✅ העברת כל המידע מה-Data Payload לתוך ה-Intent
+        if (data != null) {
+            for (String key : data.keySet()) {
+                intent.putExtra(key, data.get(key));
+            }
+        }
+
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
 
@@ -58,7 +70,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
         NotificationCompat.Builder notificationBuilder =
                 new NotificationCompat.Builder(this, channelId)
-                        .setSmallIcon(R.mipmap.ic_launcher_round) // Ensure you have a valid icon here
+                        .setSmallIcon(R.mipmap.ic_launcher_round)
                         .setContentTitle(title)
                         .setContentText(messageBody)
                         .setAutoCancel(true)
@@ -68,7 +80,6 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         NotificationManager notificationManager =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
-        // Since Android Oreo (API 26), notification channel is required.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(channelId,
                     "EasyMove Notifications",
@@ -76,6 +87,8 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
             notificationManager.createNotificationChannel(channel);
         }
 
-        notificationManager.notify(0, notificationBuilder.build());
+        // יצירת מזהה ייחודי כדי שהודעות לא ידרסו אחת את השנייה
+        int notificationId = (int) System.currentTimeMillis();
+        notificationManager.notify(notificationId, notificationBuilder.build());
     }
 }

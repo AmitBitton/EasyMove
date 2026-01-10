@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="24dp"
@@ -84,6 +85,51 @@
                 android:layout_height="wrap_content"
                 android:text="מוביל" />
         </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/layoutCustomerAddresses"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="#E3F2FD"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="כתובות ברירת מחדל (חובה):"
+                android:textStyle="bold"
+                android:textColor="#1565C0"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tvRegSourceAddress"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:background="@android:drawable/edit_text"
+                android:gravity="center_vertical"
+                android:padding="12dp"
+                android:text="לחץ לבחירת כתובת מוצא"
+                android:textColor="#757575"
+                android:textSize="16sp"
+                android:layout_marginBottom="12dp"
+                app:drawableEndCompat="@android:drawable/ic_menu_search"/>
+
+            <TextView
+                android:id="@+id/tvRegDestAddress"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:background="@android:drawable/edit_text"
+                android:gravity="center_vertical"
+                android:padding="12dp"
+                android:text="לחץ לבחירת כתובת יעד"
+                android:textColor="#757575"
+                android:textSize="16sp"
+                android:layout_marginBottom="4dp"
+                app:drawableEndCompat="@android:drawable/ic_menu_search"/>
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/layoutMoverRegistration"

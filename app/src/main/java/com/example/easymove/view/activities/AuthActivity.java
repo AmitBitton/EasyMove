@@ -18,7 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.example.easymove.BuildConfig; // וודא שיש לך את זה או תשתמש ב-String ישירות
+import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
 import com.example.easymove.viewmodel.AuthViewModel;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -43,22 +43,38 @@ public class AuthActivity extends AppCompatActivity {
 
     private EditText editEmail, editPassword, editName, editPhone;
 
-    // ✅ הוספנו את המשתנה ל-View של הכתובת
+    // שדות כתובת למוביל וללקוח
     private EditText editMoverAddress;
+    private TextView tvSource, tvDest;
+    private LinearLayout layoutMoverRegistration;
+    private LinearLayout layoutCustomerAddresses;
 
     private Button buttonAction;
     private TextView switchModeText, titleText, textUserTypeLabel;
     private RadioGroup radioUserType;
     private RadioButton radioCustomer, radioMover;
-    private LinearLayout layoutMoverRegistration;
+
     private SignInButton btnGoogleSignIn;
 
     private boolean isLoginMode = true;
     private GoogleSignInClient mGoogleSignInClient;
 
-    // ✅ משתנים לשמירת המיקום שנבחר (זמני עד ללחיצה על הרשמה)
-    private Double selectedLat = null;
-    private Double selectedLng = null;
+    // --- משתנים לשמירת הכתובות שנבחרו ---
+    // מצבי בחירה: 0=מוביל, 1=לקוח-מוצא, 2=לקוח-יעד
+    private int addressRequestMode = 0;
+
+    // נתוני מוביל
+    private Double moverLat = null;
+    private Double moverLng = null;
+
+    // נתוני לקוח
+    private String selectedSourceAddress = null;
+    private Double selectedSourceLat = null;
+    private Double selectedSourceLng = null;
+
+    private String selectedDestAddress = null;
+    private Double selectedDestLat = null;
+    private Double selectedDestLng = null;
 
     // --- Launcher לגוגל התחברות ---
     private final ActivityResultLauncher<Intent> googleSignInLauncher = registerForActivityResult(
@@ -76,16 +92,37 @@ public class AuthActivity extends AppCompatActivity {
             }
     );
 
-    // ✅ Launcher לחיפוש כתובת (התיקון שלך)
+    // ✅ Launcher אחד חכם לכל סוגי הכתובות
     private final ActivityResultLauncher<Intent> addressLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Place place = Autocomplete.getPlaceFromIntent(result.getData());
                     if (place.getLatLng() != null) {
-                        selectedLat = place.getLatLng().latitude;
-                        selectedLng = place.getLatLng().longitude;
-                        editMoverAddress.setText(place.getAddress()); // מציג את הכתובת למשתמש
+
+                        // בדיקה איזה שדה עדכנו
+                        if (addressRequestMode == 0) {
+                            // מוביל
+                            moverLat = place.getLatLng().latitude;
+                            moverLng = place.getLatLng().longitude;
+                            editMoverAddress.setText(place.getAddress());
+
+                        } else if (addressRequestMode == 1) {
+                            // לקוח - מוצא
+                            selectedSourceLat = place.getLatLng().latitude;
+                            selectedSourceLng = place.getLatLng().longitude;
+                            selectedSourceAddress = place.getAddress(); // או place.getName()
+                            tvSource.setText(selectedSourceAddress);
+                            tvSource.setTextColor(getColor(android.R.color.black));
+
+                        } else if (addressRequestMode == 2) {
+                            // לקוח - יעד
+                            selectedDestLat = place.getLatLng().latitude;
+                            selectedDestLng = place.getLatLng().longitude;
+                            selectedDestAddress = place.getAddress();
+                            tvDest.setText(selectedDestAddress);
+                            tvDest.setTextColor(getColor(android.R.color.black));
+                        }
                     }
                 }
             }
@@ -96,9 +133,8 @@ public class AuthActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_auth);
 
-        // ✅ אתחול Places (חובה!)
+        // אתחול Places
         if (!Places.isInitialized()) {
-            // שים לב: עדיף לשמור את המפתח ב-local.properties או BuildConfig
             Places.initialize(getApplicationContext(), BuildConfig.MAPS_KEY);
         }
 
@@ -122,8 +158,14 @@ public class AuthActivity extends AppCompatActivity {
         editName = findViewById(R.id.editName);
         editPhone = findViewById(R.id.editPhone);
 
-        // ✅ וודא שבקובץ XML יש לך EditText עם ה-ID הזה בתוך layoutMoverRegistration
+        // שדות כתובת מוביל
+        layoutMoverRegistration = findViewById(R.id.layoutMoverRegistration);
         editMoverAddress = findViewById(R.id.editMoverAddress);
+
+        // שדות כתובת לקוח
+        layoutCustomerAddresses = findViewById(R.id.layoutCustomerAddresses);
+        tvSource = findViewById(R.id.tvRegSourceAddress);
+        tvDest = findViewById(R.id.tvRegDestAddress);
 
         textUserTypeLabel = findViewById(R.id.textUserTypeLabel);
         buttonAction = findViewById(R.id.buttonAction);
@@ -132,7 +174,7 @@ public class AuthActivity extends AppCompatActivity {
         radioUserType = findViewById(R.id.radio_user_type);
         radioCustomer = findViewById(R.id.radio_customer);
         radioMover = findViewById(R.id.radio_mover);
-        layoutMoverRegistration = findViewById(R.id.layoutMoverRegistration);
+
         btnGoogleSignIn = findViewById(R.id.btnGoogleSignIn);
         if (btnGoogleSignIn != null) btnGoogleSignIn.setSize(SignInButton.SIZE_WIDE);
     }
@@ -143,9 +185,16 @@ public class AuthActivity extends AppCompatActivity {
             updateMode();
         });
 
-        radioUserType.setOnCheckedChangeListener((group, checkedId) ->
-                layoutMoverRegistration.setVisibility(checkedId == R.id.radio_mover ? View.VISIBLE : View.GONE)
-        );
+        // שינוי תצוגה לפי בחירת לקוח/מוביל
+        radioUserType.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == R.id.radio_mover) {
+                layoutMoverRegistration.setVisibility(View.VISIBLE);
+                layoutCustomerAddresses.setVisibility(View.GONE);
+            } else {
+                layoutMoverRegistration.setVisibility(View.GONE);
+                layoutCustomerAddresses.setVisibility(View.VISIBLE);
+            }
+        });
 
         buttonAction.setOnClickListener(v -> handleButtonClick());
 
@@ -154,82 +203,26 @@ public class AuthActivity extends AppCompatActivity {
             googleSignInLauncher.launch(signInIntent);
         });
 
-        // ✅ המאזין החסר! זה מה שיתקן את הבאג
+        // בחירת כתובת מוביל
         if (editMoverAddress != null) {
-            // מונע מהמקלדת לקפוץ כשלוחצים על השדה
             editMoverAddress.setFocusable(false);
             editMoverAddress.setClickable(true);
-
-            editMoverAddress.setOnClickListener(v -> {
-                // פתיחת חלון החיפוש של גוגל
-                List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS);
-                Intent intent = new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields)
-                        .build(this);
-                addressLauncher.launch(intent);
-            });
+            editMoverAddress.setOnClickListener(v -> openPlacePicker(0));
         }
+
+        // בחירת כתובת מוצא לקוח
+        tvSource.setOnClickListener(v -> openPlacePicker(1));
+
+        // בחירת כתובת יעד לקוח
+        tvDest.setOnClickListener(v -> openPlacePicker(2));
     }
 
-    // ... (observeViewModel נשאר אותו דבר) ...
-
-    private void handleButtonClick() {
-        String email = editEmail.getText().toString().trim();
-        String password = editPassword.getText().toString().trim();
-
-        // --- מצב התחברות (Login) ---
-        if (isLoginMode) {
-            if (TextUtils.isEmpty(email)) {
-                editEmail.setError("נא להזין אימייל");
-                return;
-            }
-            if (TextUtils.isEmpty(password)) {
-                editPassword.setError("נא להזין סיסמה");
-                return;
-            }
-            viewModel.login(email, password);
-        }
-
-        // --- מצב הרשמה (Register) ---
-        else {
-            String name = editName.getText().toString().trim();
-            String phone = editPhone.getText().toString().trim(); // טלפון הוא אופציונלי, לא בודקים אותו
-
-            // 1. בדיקות שדות חובה לכולם (לקוח ומוביל)
-            if (TextUtils.isEmpty(email)) {
-                editEmail.setError("אימייל הוא שדה חובה");
-                return;
-            }
-            if (TextUtils.isEmpty(password)) {
-                editPassword.setError("סיסמה היא שדה חובה");
-                return;
-            }
-            if (TextUtils.isEmpty(name)) {
-                editName.setError("שם מלא הוא שדה חובה");
-                return;
-            }
-
-            boolean isCustomer = radioCustomer.isChecked();
-
-            // 2. בדיקת חובה ספציפית למוביל: כתובת בסיס
-            if (!isCustomer) {
-                // אנחנו בודקים אם יש קואורדינטות (selectedLat/Lng)
-                // זה מבטיח שהמשתמש באמת בחר מהרשימה של גוגל ולא סתם דילג
-                if (selectedLat == null || selectedLng == null || TextUtils.isEmpty(editMoverAddress.getText())) {
-                    Toast.makeText(this, "מוביל חייב לבחור כתובת בסיס מהרשימה", Toast.LENGTH_LONG).show();
-                    return; // עוצר את ההרשמה
-                }
-            }
-
-            String address = editMoverAddress.getText().toString();
-
-            // אם הגענו לפה - כל השדות תקינים, מבצעים הרשמה
-            viewModel.register(email, password, name, phone, isCustomer, address, selectedLat, selectedLng);
-        }
+    private void openPlacePicker(int mode) {
+        this.addressRequestMode = mode;
+        List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS);
+        Intent intent = new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).build(this);
+        addressLauncher.launch(intent);
     }
-
-    // ... (שאר הפונקציות ללא שינוי, observeViewModel, updateMode, showCompleteProfileDialog) ...
-    // רק שים לב: ב-observeViewModel וודא שאתה לא מוחק שום דבר חיוני.
-    // את הפונקציה onConfirmClicked ושאר הקוד שלא קשור לכאן הסרנו כי הוא שייך ל-ChatActivity.
 
     private void observeViewModel() {
         viewModel.getNavigateToMain().observe(this, shouldNavigate -> {
@@ -253,7 +246,67 @@ public class AuthActivity extends AppCompatActivity {
         viewModel.getShowGoogleTypeDialog().observe(this, this::showCompleteProfileDialog);
     }
 
-    // ... (שאר הדיאלוגים והעזרים נשארים זהים למה ששלחתי קודם) ...
+    private void handleButtonClick() {
+        String email = editEmail.getText().toString().trim();
+        String password = editPassword.getText().toString().trim();
+
+        // --- מצב התחברות (Login) ---
+        if (isLoginMode) {
+            if (TextUtils.isEmpty(email)) {
+                editEmail.setError("נא להזין אימייל");
+                return;
+            }
+            if (TextUtils.isEmpty(password)) {
+                editPassword.setError("נא להזין סיסמה");
+                return;
+            }
+            viewModel.login(email, password);
+        }
+
+        // --- מצב הרשמה (Register) ---
+        else {
+            String name = editName.getText().toString().trim();
+            String phone = editPhone.getText().toString().trim();
+
+            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password) || TextUtils.isEmpty(name)) {
+                Toast.makeText(this, "נא למלא את כל שדות החובה", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            boolean isCustomer = radioCustomer.isChecked();
+
+            // ✅ ולידציה ללקוח (שני הכתובות חובה!)
+            if (isCustomer) {
+                if (selectedSourceAddress == null || selectedDestAddress == null) {
+                    Toast.makeText(this, "חובה לבחור כתובת מוצא ויעד להרשמה", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            // ✅ ולידציה למוביל (כתובת בסיס חובה!)
+            else {
+                if (moverLat == null || moverLng == null) {
+                    Toast.makeText(this, "מוביל חייב לבחור כתובת בסיס מהרשימה", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+
+            // הכנת נתונים להעברה
+            // שים לב: אנחנו מעבירים את הנתונים הרלוונטיים לפי סוג המשתמש
+            String addressToSend = isCustomer ? selectedSourceAddress : editMoverAddress.getText().toString();
+            Double latToSend = isCustomer ? selectedSourceLat : moverLat;
+            Double lngToSend = isCustomer ? selectedSourceLng : moverLng;
+
+            // אזהרה: עליך לעדכן את AuthViewModel כך שיקבל גם את נתוני ה-Destination של הלקוח!
+            // כרגע אני מעביר את זה לפונקציה הקיימת, אבל מומלץ להוסיף ל-ViewModel גם destAddress, destLat, destLng
+            // כדי שזה יישמר במקום הנכון (defaultToAddress).
+
+            viewModel.register(email, password, name, phone, isCustomer,
+                    addressToSend, latToSend, lngToSend,
+                    // נתונים נוספים של הלקוח (יש לעדכן את הפונקציה ב-ViewModel לקבל אותם)
+                    selectedDestAddress, selectedDestLat, selectedDestLng);
+        }
+    }
+
     private void updateMode() {
         if (isLoginMode) {
             titleText.setText("התחברות");
@@ -262,6 +315,7 @@ public class AuthActivity extends AppCompatActivity {
             textUserTypeLabel.setVisibility(View.GONE);
             radioUserType.setVisibility(View.GONE);
             layoutMoverRegistration.setVisibility(View.GONE);
+            layoutCustomerAddresses.setVisibility(View.GONE);
             buttonAction.setText("התחבר");
             switchModeText.setText("אין לך חשבון? להרשמה לחצי כאן");
         } else {
@@ -270,29 +324,29 @@ public class AuthActivity extends AppCompatActivity {
             editPhone.setVisibility(View.VISIBLE);
             textUserTypeLabel.setVisibility(View.VISIBLE);
             radioUserType.setVisibility(View.VISIBLE);
-            // מציגים רק אם זה מוביל
-            layoutMoverRegistration.setVisibility(radioMover.isChecked() ? View.VISIBLE : View.GONE);
+
+            // הצגת השדות הנכונים לפי הבחירה הנוכחית ברדיו
+            if (radioCustomer.isChecked()) {
+                layoutCustomerAddresses.setVisibility(View.VISIBLE);
+                layoutMoverRegistration.setVisibility(View.GONE);
+            } else {
+                layoutCustomerAddresses.setVisibility(View.GONE);
+                layoutMoverRegistration.setVisibility(View.VISIBLE);
+            }
+
             buttonAction.setText("הרשמה");
             switchModeText.setText("יש לך כבר חשבון? התחברות");
         }
     }
 
+    // ... (פונקציית הדיאלוג נשארת ללא שינוי)
     private void showCompleteProfileDialog(String uid) {
-        // ... (אותו קוד כמו קודם) ...
-        // הערה: אם אתה רוצה לאפשר למוביל להשלים פרטים בגוגל, זה מורכב יותר
-        // ודורש דיאלוג מותאם אישית עם בחירת כתובת.
-        // לבינתיים הקוד הקודם שומר אותו בלי כתובת וזה בסדר (הוא יערוך בפרופיל).
         new AlertDialog.Builder(this)
                 .setTitle("השלמת הרשמה")
                 .setMessage("ברוכים הבאים! אנא בחר סוג משתמש להמשך.")
                 .setCancelable(false)
-                .setPositiveButton("אני לקוח", (dialog, which) ->
-                        viewModel.completeGoogleRegistration(uid, "customer")
-                )
-                .setNegativeButton("אני מוביל", (dialog, which) -> {
-                    Toast.makeText(this, "מוביל נרשם בלי מיקום כרגע. יש להשלים בפרופיל.", Toast.LENGTH_LONG).show();
-                    viewModel.completeGoogleRegistration(uid, "mover");
-                })
+                .setPositiveButton("אני לקוח", (dialog, which) -> viewModel.completeGoogleRegistration(uid, "customer"))
+                .setNegativeButton("אני מוביל", (dialog, which) -> viewModel.completeGoogleRegistration(uid, "mover"))
                 .show();
     }
 }

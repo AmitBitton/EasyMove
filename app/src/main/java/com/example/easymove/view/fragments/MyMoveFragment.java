@@ -36,13 +36,18 @@ public class MyMoveFragment extends Fragment {
     private TextView textNoMove;
     private CardView cardMoveDetails;
     private TextView textFrom, textTo, textDate;
+    // ✅ שדות חדשים
+    private TextView tvPartnerInfo, tvIntermediateAddress;
+
     private Button btnViewItems, btnAddPartner;
     private MaterialButton btnCancelMove;
     private MaterialButton btnChatWithMover;
 
-    public MyMoveFragment() {
-        // Required empty public constructor
-    }
+    private CardView cardIncomingRequest;
+    private TextView tvRequestDetails;
+    private Button btnApproveReq, btnRejectReq;
+
+    public MyMoveFragment() { }
 
     @Nullable
     @Override
@@ -60,22 +65,34 @@ public class MyMoveFragment extends Fragment {
         setupButtons();
         observeViewModel();
 
-        // טעינת הנתונים
         viewModel.loadCurrentMove();
+
+        String uid = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+        if (uid != null) {
+            viewModel.listenForMatchRequests(uid);
+        }
     }
 
     private void initViews(View view) {
         textNoMove = view.findViewById(R.id.textNoMove);
         cardMoveDetails = view.findViewById(R.id.cardMoveDetails);
-
         textFrom = view.findViewById(R.id.textFrom);
         textTo = view.findViewById(R.id.textTo);
         textDate = view.findViewById(R.id.textDate);
+
+        // ✅ חיבור לרכיבים החדשים
+        tvPartnerInfo = view.findViewById(R.id.tvPartnerInfo);
+        tvIntermediateAddress = view.findViewById(R.id.tvIntermediateAddress);
 
         btnViewItems = view.findViewById(R.id.btnViewItems);
         btnAddPartner = view.findViewById(R.id.btnAddPartner);
         btnCancelMove = view.findViewById(R.id.btnCancelMove);
         btnChatWithMover = view.findViewById(R.id.btnChatWithMover);
+
+        cardIncomingRequest = view.findViewById(R.id.cardIncomingRequest);
+        tvRequestDetails = view.findViewById(R.id.tvRequestDetails);
+        btnApproveReq = view.findViewById(R.id.btnApproveReq);
+        btnRejectReq = view.findViewById(R.id.btnRejectReq);
     }
 
     private void observeViewModel() {
@@ -83,6 +100,21 @@ public class MyMoveFragment extends Fragment {
 
         viewModel.getErrorMsg().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
+        });
+
+        viewModel.getIncomingRequest().observe(getViewLifecycleOwner(), req -> {
+            if (req != null) {
+                cardIncomingRequest.setVisibility(View.VISIBLE);
+                String info = req.getFromUserName() + " רוצה לחלוק איתך הובלה:\n" +
+                        "מוצא: " + req.getOriginalSourceAddress() + "\n" +
+                        "יעד: " + req.getOriginalDestAddress();
+                tvRequestDetails.setText(info);
+
+                btnApproveReq.setOnClickListener(v -> viewModel.approveMatch(req));
+                btnRejectReq.setOnClickListener(v -> viewModel.rejectMatch(req));
+            } else {
+                cardIncomingRequest.setVisibility(View.GONE);
+            }
         });
     }
 
@@ -96,66 +128,97 @@ public class MyMoveFragment extends Fragment {
         textNoMove.setVisibility(View.GONE);
         cardMoveDetails.setVisibility(View.VISIBLE);
 
-        // 1. עדכון כתובות
-        String source = (move.getSourceAddress() != null && !move.getSourceAddress().isEmpty())
-                ? move.getSourceAddress() : "כתובת מוצא חסרה";
-        String dest = (move.getDestAddress() != null && !move.getDestAddress().isEmpty())
-                ? move.getDestAddress() : "כתובת יעד חסרה";
+        textFrom.setText(move.getSourceAddress() != null ? move.getSourceAddress() : "כתובת מוצא חסרה");
+        textTo.setText(move.getDestAddress() != null ? move.getDestAddress() : "כתובת יעד חסרה");
 
-        textFrom.setText(source);
-        textTo.setText(dest);
+        // ✅ טיפול בכתובת עצירה (שותף)
+        if (move.getIntermediateAddress() != null && !move.getIntermediateAddress().isEmpty()) {
+            tvIntermediateAddress.setVisibility(View.VISIBLE);
+            tvIntermediateAddress.setText("➕ איסוף נוסף מ: " + move.getIntermediateAddress());
+        } else {
+            tvIntermediateAddress.setVisibility(View.GONE);
+        }
 
-        // 2. עדכון תאריך (החלק שהיה חסר לך)
         if (move.getMoveDate() > 0) {
             try {
                 Date date = new Date(move.getMoveDate());
                 SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
                 textDate.setText(sdf.format(date));
-                textDate.setTextColor(Color.BLACK); // וודא שזה שחור
+                textDate.setTextColor(Color.BLACK);
             } catch (Exception e) {
                 textDate.setText("שגיאה בתאריך");
-                Log.e("MyMoveFragment", "Date format error", e);
             }
         } else {
             textDate.setText("טרם נקבע תאריך");
             textDate.setTextColor(Color.RED);
         }
 
-        // 3. עדכון כפתור הצ'אט
+        // ✅ לוגיקה חכמה לזיהוי מי אני (הלקוח הראשי או השותף)
+        String myId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+
+        if (move.getPartnerId() != null && !move.getPartnerId().isEmpty()) {
+            // יש שותף!
+            btnAddPartner.setVisibility(View.GONE);
+            tvPartnerInfo.setVisibility(View.VISIBLE);
+
+            // אם אני היוצר של ההובלה -> מציגים את השם של השותף
+            // אם אני השותף -> מציגים את השם של היוצר
+            String otherId;
+            String label;
+
+            if (myId.equals(move.getCustomerId())) {
+                otherId = move.getPartnerId();
+                label = "שותף:";
+            } else {
+                otherId = move.getCustomerId();
+                label = "הובלה ראשית של:";
+            }
+
+            // שליפת שם האדם השני
+            new com.example.easymove.model.repository.UserRepository().getUserNameById(otherId)
+                    .addOnSuccessListener(name -> {
+                        tvPartnerInfo.setText("✅ " + label + " " + name);
+                    });
+        } else {
+            // אין שותף עדיין
+
+            // כפתור הוספת שותף מוצג רק אם אני בעל ההובלה (ולא אם אני סתם צופה)
+            if (myId.equals(move.getCustomerId())) {
+                btnAddPartner.setVisibility(View.VISIBLE);
+            } else {
+                btnAddPartner.setVisibility(View.GONE);
+            }
+            tvPartnerInfo.setVisibility(View.GONE);
+        }
+
         if ("CONFIRMED".equals(move.getStatus()) && move.getChatId() != null && !move.getChatId().isEmpty()) {
             btnChatWithMover.setVisibility(View.VISIBLE);
         } else {
             btnChatWithMover.setVisibility(View.GONE);
         }
 
-        // בדיקה אם ההובלה עברה
         checkIfMoveIsFinished(move);
     }
 
     private void setupButtons() {
-        // כפתור צ'אט
         btnChatWithMover.setOnClickListener(v -> {
             MoveRequest move = viewModel.getCurrentMove().getValue();
             if (move != null && move.getChatId() != null) {
                 Intent intent = new Intent(getContext(), ChatActivity.class);
                 intent.putExtra("CHAT_ID", move.getChatId());
                 startActivity(intent);
-            } else {
-                Toast.makeText(getContext(), "שגיאה בפרטי הצ'אט", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // ביטול הובלה
         btnCancelMove.setOnClickListener(v -> {
             new AlertDialog.Builder(getContext())
                     .setTitle("ביטול הובלה")
-                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?\n")
+                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?")
                     .setPositiveButton("כן, בטל", (d, w) -> viewModel.cancelCurrentMove())
                     .setNegativeButton("לא", null)
                     .show();
         });
 
-        // צפייה ברשומות
         btnViewItems.setOnClickListener(v -> {
             getParentFragmentManager()
                     .beginTransaction()
@@ -164,11 +227,9 @@ public class MyMoveFragment extends Fragment {
                     .commit();
         });
 
-        // ✅ התיקון: החזרנו את המעבר למסך שותפים (במקום ה-Toast)
         btnAddPartner.setOnClickListener(v -> {
             getParentFragmentManager()
                     .beginTransaction()
-                    // וודא שזה הנתיב הנכון לפרגמנט שלך, או תוסיף import למעלה
                     .replace(R.id.fragmentContainer, new com.example.easymove.view.fragments.PartnerMatchFragment())
                     .addToBackStack(null)
                     .commit();
@@ -178,7 +239,6 @@ public class MyMoveFragment extends Fragment {
     private void checkIfMoveIsFinished(MoveRequest move) {
         if ("CONFIRMED".equals(move.getStatus()) && move.getMoveDate() > 0) {
             long now = System.currentTimeMillis();
-            // אם עבר יום מאז התאריך (סתם כדי לא להציק באותו רגע)
             if (move.getMoveDate() < now - 86400000L) {
                 showCompletionDialog();
             }
