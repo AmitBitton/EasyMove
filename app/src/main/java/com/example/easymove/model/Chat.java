@@ -1,16 +1,19 @@
-package com.example.easymove.model;
+package com.example.easymove.model; // מודלים של האפליקציה
 
-import com.google.firebase.Timestamp;
-import java.util.List;
+import com.google.firebase.Timestamp; // Timestamp של Firebase לשדות זמן
+import java.util.List; // רשימת משתמשים
 
 public class Chat implements ChatListItem {
+    // מודל שמייצג מסמך "Chat" ב-Firestore
+    // וגם מממש ChatListItem כדי שהאדפטר ידע איך להציג אותו ברשימה
+
     private String id; // מזהה הצ'אט (בדרך כלל חיבור של שני ה-ID)
     private List<String> userIds; // רשימה של ה-UID של המשתתפים (לחיפוש קל)
 
     // מידע על ההודעה האחרונה לתצוגה ברשימה הראשית
-    private String lastMessage;
-    private Timestamp lastUpdated;
-    private String lastSenderId;
+    private String lastMessage; // טקסט ההודעה האחרונה
+    private Timestamp lastUpdated; // זמן עדכון אחרון
+    private String lastSenderId; // מי שלח את ההודעה האחרונה
 
     // פרטי משתמש א' (למשל הלקוח)
     private String user1Id;
@@ -21,49 +24,59 @@ public class Chat implements ChatListItem {
     private String user2Id;
     private String user2Name;
     private String user2Image;
+
     // תיאום הובלה
     private String customerId;          // מי פתח את הצ'אט (הלקוח)
     private String moverId;             // המוביל
     private boolean moverConfirmed;     // המוביל לחץ "תיאמתי"
     private boolean customerConfirmed;  // הלקוח אישר
-    private Long moverConfirmedAt;
-    private Long customerConfirmedAt;
+    private Long moverConfirmedAt;      // זמן אישור המוביל
+    private Long customerConfirmedAt;   // זמן אישור הלקוח
 
     // שדה עזר (לא נשמר במסד נתונים) לדעת מי "האני" הנוכחי באפליקציה
     private transient String currentUserId;
+    // transient = לא נשמר/לא נקרא מול פיירבייס; זה רק ללוגיקה של תצוגה
 
-    public Chat() {} // חובה לפיירבייס
+    public Chat() {} // חובה לפיירבייס (בנאי ריק כדי ש-Firestore יוכל ליצור אובייקט)
 
     // --- לוגיקה חכמה למימוש הממשק ---
 
     // פונקציה שנקראת באדפטר כדי להגדיר מי המשתמש הנוכחי
     public void setCurrentUserId(String currentUserId) {
+        // קלט: currentUserId = ה-UID של המשתמש המחובר
+        // פלט: אין, רק שומר ערך כדי שהמודל ידע "מי אני"
         this.currentUserId = currentUserId;
     }
 
     @Override
     public String getId() {
+        // מחזירה את מזהה הצ'אט
         return id;
     }
 
     @Override
     public long getTimestampLong() {
+        // מחזירה זמן עדכון אחרון כמספר long (מילישניות) כדי למיין/להציג
         return lastUpdated != null ? lastUpdated.toDate().getTime() : 0;
     }
 
     @Override
     public String getChatTitle() {
-        // אם אני משתמש 1, הצג לי את השם של משתמש 2, ולהפך
+        // מחזירה את השם שיוצג ברשימת הצ'אטים:
+        // תמיד "השם של הצד השני" ביחס ל-currentUserId
         if (currentUserId != null && currentUserId.equals(user1Id)) {
+            // אם אני = user1, אז הצד השני הוא user2
             return user2Name;
         } else {
+            // אחרת אני = user2 (או currentUserId עדיין לא הוגדר), אז מציגים user1
             return user1Name;
         }
     }
 
     @Override
     public String getChatImageUrl() {
-        // אם אני משתמש 1, הצג לי את התמונה של משתמש 2, ולהפך
+        // מחזירה את תמונת הפרופיל שיוצג ברשימת הצ'אטים:
+        // תמיד "התמונה של הצד השני"
         if (currentUserId != null && currentUserId.equals(user1Id)) {
             return user2Image;
         } else {
@@ -73,6 +86,7 @@ public class Chat implements ChatListItem {
 
     @Override
     public String getLastMessageText() {
+        // מחזירה טקסט הודעה אחרונה (או ריק אם null)
         return lastMessage != null ? lastMessage : "";
     }
 

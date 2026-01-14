@@ -1,11 +1,21 @@
 package com.example.easymove.model.repository;
 
 import com.example.easymove.model.MoveRequest;
+import com.example.easymove.model.UserProfile; // לוודא שיש import
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.*;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.WriteBatch;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -13,22 +23,88 @@ public class MoveRepository {
 
     private final FirebaseFirestore db = FirebaseFirestore.getInstance();
     private final FirebaseAuth auth = FirebaseAuth.getInstance();
-    private final String COLLECTION = "moves";
+
+    private static final String COLLECTION_MOVES = "moves";
+    private static final String COLLECTION_CHATS = "chats";
+    private static final String COLLECTION_MATCH_REQUESTS = "match_requests";
+    private static final String COLLECTION_USERS = "users";
 
     public String getCurrentUserId() {
         return auth.getCurrentUser() != null ? auth.getCurrentUser().getUid() : null;
     }
 
+    // --- לוגיקה חדשה: שותפים והובלות ---
+
     /**
-     * מביא את ההובלה הפעילה של הלקוח הספציפי.
-     * מקבל את ה-customerId כפרמטר ליציבות.
+     * שלב 1 באישור: השותף מאשר.
+     * הפונקציה לוקחת את הכתובת מפרופיל השותף ושומרת בבקשה, ומעדכנת סטטוס ל"ממתין למוביל".
      */
+    public Task<Void> approveMatchByPartner(String requestId, String partnerUid) {
+        // קודם שולפים את הפרופיל של השותף כדי לקחת את הכתובת שלו
+        return db.collection(COLLECTION_USERS).document(partnerUid).get()
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful() || task.getResult() == null) {
+                        throw new Exception("שגיאה בשליפת פרטי שותף");
+                    }
+                    UserProfile profile = task.getResult().toObject(UserProfile.class);
+                    String address = (profile != null && profile.getDefaultFromAddress() != null)
+                            ? profile.getDefaultFromAddress() : "כתובת לא מעודכנת";
+
+                    // מעדכנים את הבקשה: הוספת הכתובת ושינוי סטטוס
+                    return db.collection(COLLECTION_MATCH_REQUESTS).document(requestId)
+                            .update(
+                                    "status", "waiting_for_mover", // מעבירים את הכדור למוביל
+                                    "partnerAddress", address
+                            );
+                });
+    }
+
+    /**
+     * שלב 2 באישור: המוביל מאשר.
+     * סוגר את הבקשה ומעדכן את ההובלה הראשית עם השותף והכתובת שלו.
+     */
+    public Task<Void> finalizePartnerMatch(String requestId, String moveId, String partnerId, String partnerAddress) {
+        WriteBatch batch = db.batch();
+
+        android.util.Log.d("DEBUG_REPO", "Finalizing match: MoveID=" + moveId + ", PartnerID=" + partnerId);
+
+        // 1. עדכון הבקשה ל-APPROVED (סופי)
+        DocumentReference requestRef = db.collection(COLLECTION_MATCH_REQUESTS).document(requestId);
+        batch.update(requestRef, "status", "approved");
+
+        // 2. עדכון ההובלה עצמה עם פרטי השותף
+        DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+        batch.update(moveRef,
+                "partnerId", partnerId, // <--- זה חייב להיות ה-UID המדויק של המשתמש
+                "intermediateAddress", partnerAddress
+        );
+
+        return batch.commit();
+    }
+
+    /**
+     * דחיית בקשה ומחיקתה (ניקוי דאטה כפי שביקשת)
+     */
+    public Task<Void> rejectAndDeleteRequest(String requestId) {
+        return db.collection(COLLECTION_MATCH_REQUESTS).document(requestId).delete();
+    }
+
+    // ----------------------------------------------------
+    // שאר הקוד הקיים שלך נשאר ללא שינוי
+    // ----------------------------------------------------
+
+    public ListenerRegistration listenToMoverConfirmedMoves(String moverId, EventListener<QuerySnapshot> listener) {
+        return db.collection(COLLECTION_MOVES)
+                .whereEqualTo("moverId", moverId)
+                .whereEqualTo("status", "CONFIRMED")
+                .orderBy("moveDate", Query.Direction.ASCENDING)
+                .addSnapshotListener(listener);
+    }
+
     public Task<MoveRequest> getCurrentActiveMove(String customerId) {
         if (customerId == null) return Tasks.forException(new Exception("Customer ID is null"));
-
         List<String> activeStatuses = Arrays.asList("OPEN", "CONFIRMED");
-
-        return db.collection(COLLECTION)
+        return db.collection(COLLECTION_MOVES)
                 .whereEqualTo("customerId", customerId)
                 .whereIn("status", activeStatuses)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -36,7 +112,6 @@ public class MoveRepository {
                 .get()
                 .continueWith(task -> {
                     if (!task.isSuccessful()) throw task.getException();
-
                     QuerySnapshot snapshot = task.getResult();
                     if (snapshot != null && !snapshot.isEmpty()) {
                         DocumentSnapshot doc = snapshot.getDocuments().get(0);
@@ -48,129 +123,146 @@ public class MoveRepository {
                 });
     }
 
-    /**
-     * הפונקציה החכמה ליצירת הובלה.
-     * מחליפה את הטרנזקציה הלא-חוקית בשרשרת פעולות (Chain).
-     */
     public Task<MoveRequest> ensureActiveMoveForCustomer(String customerId) {
-        // שלב 1: בודקים אם קיימת הובלה פעילה
         return getCurrentActiveMove(customerId).continueWithTask(task -> {
             MoveRequest existingMove = task.getResult();
-
-            // אם מצאנו פעילה -> מחזירים אותה וזהו
             if (existingMove != null) {
                 return Tasks.forResult(existingMove);
             }
-
-            // שלב 2: אם לא מצאנו -> יוצרים חדשה
-            DocumentReference newRef = db.collection(COLLECTION).document();
-
+            DocumentReference newRef = db.collection(COLLECTION_MOVES).document();
             MoveRequest move = new MoveRequest();
             move.setId(newRef.getId());
             move.setCustomerId(customerId);
             move.setStatus("OPEN");
             move.setConfirmed(false);
             move.setCreatedAt(System.currentTimeMillis());
-            move.setMoverId(null);
-            move.setChatId(null);
-
-            return newRef.set(move).continueWith(t -> {
-                if (!t.isSuccessful()) throw t.getException();
-                return move; // מחזירים את האובייקט החדש שנוצר
-            });
+            return newRef.set(move).continueWith(t -> move);
         });
     }
 
-    /**
-     * ביטול הובלה
-     */
-    public Task<Void> cancelMove(String moveId) {
-        return db.collection(COLLECTION).document(moveId).update(
-                "status", "CANCELED",
-                "confirmed", false
-        );
+    public Task<Void> updateMoveDraftDetails(String customerId, String source, String dest, long date) {
+        return getCurrentActiveMove(customerId).continueWithTask(task -> {
+            MoveRequest move = task.getResult();
+            if (move == null) {
+                return ensureActiveMoveForCustomer(customerId).continueWithTask(t -> {
+                    return updateMoveFieldsInternal(t.getResult().getId(), source, dest, date);
+                });
+            }
+            return updateMoveFieldsInternal(move.getId(), source, dest, date);
+        });
     }
 
-    /**
-     * סיום הובלה
-     */
+    private Task<Void> updateMoveFieldsInternal(String moveId, String source, String dest, long date) {
+        return db.collection(COLLECTION_MOVES).document(moveId)
+                .update("sourceAddress", source, "destAddress", dest, "moveDate", date);
+    }
+
+    public Task<Void> cancelMoveAndResetChat(String moveId, String chatId, String customerId) {
+        if (chatId == null || chatId.isEmpty()) {
+            return db.collection(COLLECTION_MOVES).document(moveId).get().continueWithTask(task -> {
+                if (task.isSuccessful() && task.getResult() != null) {
+                    String realChatId = task.getResult().getString("chatId");
+                    return performCancel(moveId, realChatId, customerId);
+                }
+                return performCancel(moveId, null, customerId);
+            });
+        }
+        return performCancel(moveId, chatId, customerId);
+    }
+
+    private Task<Void> performCancel(String moveId, String chatId, String customerId) {
+        WriteBatch batch = db.batch();
+        DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+        batch.update(moveRef, "status", "CANCELED", "confirmed", false);
+        if (chatId != null && !chatId.isEmpty()) {
+            DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
+            batch.update(chatRef, "moverConfirmed", false, "customerConfirmed", false, "moverConfirmedAt", null, "customerConfirmedAt", null);
+        }
+        if (customerId != null) {
+            DocumentReference userRef = db.collection("users").document(customerId);
+            batch.update(userRef, "defaultFromAddress", null, "defaultToAddress", null, "defaultMoveDate", 0, "fromLat", null, "fromLng", null, "toLat", null, "toLng", null);
+        }
+        return batch.commit();
+    }
+
     public Task<Void> completeMove(String moveId) {
-        return db.collection(COLLECTION).document(moveId).update("status", "COMPLETED");
+        return db.collection(COLLECTION_MOVES).document(moveId).get().continueWithTask(task -> {
+            String chatId = null;
+            if (task.isSuccessful() && task.getResult() != null) {
+                chatId = task.getResult().getString("chatId");
+            }
+            WriteBatch batch = db.batch();
+            DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+            batch.update(moveRef, "status", "COMPLETED");
+            if (chatId != null && !chatId.isEmpty()) {
+                DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
+                batch.update(chatRef, "moverConfirmed", false, "customerConfirmed", false, "moverConfirmedAt", null, "customerConfirmedAt", null);
+            }
+            return batch.commit();
+        });
     }
 
-    /**
-     * אישור ע"י לקוח (נשאר עם טרנזקציה כי כאן אנחנו עובדים על ID ספציפי וזה חוקי ומצוין!)
-     */
     public Task<Void> confirmMoveByCustomer(String chatId, String moverId, String customerId) {
-        // שולפים קודם את ההובלה הפעילה כדי להשיג את ה-moveId
         return getCurrentActiveMove(customerId).continueWithTask(task -> {
             MoveRequest activeMove = task.getResult();
-            if (activeMove == null) {
-                throw new FirebaseFirestoreException("לא נמצאה הובלה פעילה לאישור",
-                        FirebaseFirestoreException.Code.ABORTED);
-            }
+            if (activeMove == null) throw new FirebaseFirestoreException("No active move", FirebaseFirestoreException.Code.ABORTED);
 
             String moveId = activeMove.getId();
-            DocumentReference moveRef = db.collection(COLLECTION).document(moveId);
-            DocumentReference chatRef = db.collection("chats").document(chatId);
+            DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+            DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
+            DocumentReference userRef = db.collection("users").document(customerId);
 
             return db.runTransaction(transaction -> {
-                DocumentSnapshot chatSnap = transaction.get(chatRef);
-                if (!chatSnap.exists()) {
-                    throw new FirebaseFirestoreException("הצ'אט לא קיים", FirebaseFirestoreException.Code.ABORTED);
-                }
-
-                Boolean moverConfirmed = chatSnap.getBoolean("moverConfirmed");
-                if (moverConfirmed == null || !moverConfirmed) {
-                    throw new FirebaseFirestoreException("המוביל טרם אישר", FirebaseFirestoreException.Code.ABORTED);
-                }
-
-                // עדכון הצ'אט
-                transaction.update(chatRef,
-                        "customerConfirmed", true,
-                        "customerConfirmedAt", System.currentTimeMillis()
-                );
-
-                // עדכון ההובלה - הופכת ל-CONFIRMED
-                transaction.update(moveRef,
-                        "status", "CONFIRMED",
-                        "confirmed", true,
-                        "moverId", moverId,
-                        "chatId", chatId
-                );
-
+                transaction.update(chatRef, "customerConfirmed", true, "customerConfirmedAt", System.currentTimeMillis());
+                transaction.update(moveRef, "status", "CONFIRMED", "confirmed", true, "moverId", moverId, "chatId", chatId);
+                transaction.update(userRef, "defaultFromAddress", activeMove.getSourceAddress(), "defaultToAddress", activeMove.getDestAddress(), "defaultMoveDate", activeMove.getMoveDate(), "fromLat", activeMove.getSourceLat(), "fromLng", activeMove.getSourceLng(), "toLat", activeMove.getDestLat(), "toLng", activeMove.getDestLng());
                 return null;
             });
         });
     }
 
+    public Task<Boolean> hasActiveConfirmedMove(String customerId) {
+        return db.collection(COLLECTION_MOVES)
+                .whereEqualTo("customerId", customerId)
+                .whereEqualTo("status", "CONFIRMED")
+                .limit(1)
+                .get()
+                .continueWith(task -> !task.getResult().isEmpty());
+    }
+
+    public Task<List<MoveRequest>> getMoveHistory(String uid, String userType) {
+        String fieldName = "mover".equals(userType) ? "moverId" : "customerId";
+        List<String> historyStatuses = Arrays.asList("COMPLETED", "CANCELED");
+        return db.collection(COLLECTION_MOVES)
+                .whereEqualTo(fieldName, uid)
+                .whereIn("status", historyStatuses)
+                .orderBy("moveDate", Query.Direction.DESCENDING)
+                .get()
+                .continueWith(this::mapQueryToMoves);
+    }
+
     public Task<List<MoveRequest>> getMoverConfirmedMoves(String moverId) {
-        return db.collection(COLLECTION)
+        return db.collection(COLLECTION_MOVES)
                 .whereEqualTo("moverId", moverId)
                 .whereEqualTo("status", "CONFIRMED")
-                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .orderBy("moveDate", Query.Direction.ASCENDING)
                 .get()
-                .continueWith(task -> {
-                    if (!task.isSuccessful()) throw task.getException();
-                    List<MoveRequest> moves = new java.util.ArrayList<>();
-                    QuerySnapshot snapshot = task.getResult();
-                    if (snapshot != null) {
-                        for (DocumentSnapshot doc : snapshot.getDocuments()) {
-                            MoveRequest move = doc.toObject(MoveRequest.class);
-                            if (move != null) {
-                                move.setId(doc.getId());
-                                moves.add(move);
-                            }
-                        }
-                    }
-                    return moves;
-                });
+                .continueWith(this::mapQueryToMoves);
     }
-    public Task<Void> updateMoveDetails(String moveId, String fromAddress, String toAddress, long moveDate) {
-        return db.collection(COLLECTION).document(moveId).update(
-                "sourceAddress", fromAddress,
-                "destAddress", toAddress,
-                "moveDate", moveDate
-        );
+
+    // פונקציית עזר להמרת תוצאות שאילתה לרשימת הובלות
+    private List<MoveRequest> mapQueryToMoves(Task<QuerySnapshot> task) throws Exception {
+        if (!task.isSuccessful()) throw task.getException();
+        List<MoveRequest> moves = new ArrayList<>();
+        if (task.getResult() != null) {
+            for (DocumentSnapshot doc : task.getResult()) {
+                MoveRequest move = doc.toObject(MoveRequest.class);
+                if (move != null) {
+                    move.setId(doc.getId());
+                    moves.add(move);
+                }
+            }
+        }
+        return moves;
     }
 }

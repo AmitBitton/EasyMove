@@ -12,12 +12,15 @@ import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -329,20 +332,39 @@ public class UserRepository {
     }
 
     /**
-     * שליחת בקשת חברות למשתמש אחר.
+     * שליחת בקשת חברות למשתמש אחר (מתוקן)
+     * שולף את ההובלה הפעילה, את השם שלי, ויוצר בקשה עם moveId.
      */
     public Task<Void> sendMatchRequest(String targetUserId) {
         String myUid = uidOrThrow();
 
-        // קודם מביאים את השם שלי, כדי שיהיה כתוב יפה בבקשה
-        return getUserById(myUid).continueWithTask(task -> {
-            UserProfile myProfile = task.getResult();
-            String myName = (myProfile != null && myProfile.getName() != null) ? myProfile.getName() : "משתמש";
+        // 1. שליפת ההובלה הפעילה כדי לקבל ID וכתובות
+        return db.collection("moves")
+                .whereEqualTo("customerId", myUid)
+                .whereIn("status", java.util.Arrays.asList("OPEN", "CONFIRMED"))
+                .limit(1)
+                .get()
+                .continueWithTask(moveTask -> {
+                    if (!moveTask.isSuccessful() || moveTask.getResult().isEmpty()) {
+                        throw new Exception("לא נמצאה הובלה פעילה לצרף אליה שותף");
+                    }
 
-            MatchRequest request = new MatchRequest(myUid, myName, targetUserId);
+                    DocumentSnapshot moveDoc = moveTask.getResult().getDocuments().get(0);
+                    String moveId = moveDoc.getId();
+                    String source = moveDoc.getString("sourceAddress");
+                    String dest = moveDoc.getString("destAddress");
 
-            return db.collection("match_requests").add(request).continueWith(t -> null);
-        });
+                    // 2. שליפת השם שלי
+                    return getUserById(myUid).continueWithTask(profileTask -> {
+                        UserProfile myProfile = profileTask.getResult();
+                        String myName = (myProfile != null && myProfile.getName() != null) ? myProfile.getName() : "משתמש";
+
+                        // 3. יצירת הבקשה עם הכתובות
+                        MatchRequest request = new MatchRequest(myUid, myName, targetUserId, moveId, source, dest);
+
+                        return db.collection("match_requests").add(request).continueWith(t -> null);
+                    });
+                });
     }
 
     /**
@@ -362,5 +384,36 @@ public class UserRepository {
     public Task<Void> updateMatchRequestStatus(String requestId, String newStatus) {
         return db.collection("match_requests").document(requestId)
                 .update("status", newStatus);
+    }
+
+    /**
+     * בדיקה אם ההתראות דלוקות (האם קיים טוקן למשתמש)
+     */
+    public Task<Boolean> isNotificationEnabled(String userId) {
+        return db.collection("users").document(userId).get()
+                .continueWith(task -> {
+                    if (task.isSuccessful() && task.getResult() != null) {
+                        String token = task.getResult().getString("fcmToken");
+                        return token != null && !token.isEmpty();
+                    }
+                    return false;
+                });
+    }
+
+    /**
+     * שמירת טוקן (הפעלת התראות)
+     */
+    public Task<Void> updateFcmToken(String userId, String token) {
+        return db.collection("users").document(userId)
+                .update("fcmToken", token);
+    }
+
+    /**
+     * מחיקת טוקן (כיבוי התראות)
+     */
+    public Task<Void> removeFcmToken(String userId) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("fcmToken", FieldValue.delete());
+        return db.collection("users").document(userId).update(updates);
     }
 }

@@ -11,7 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.easymove.R;
 import com.example.easymove.model.UserProfile;
-import java.text.SimpleDateFormat; // אימפורט לעיצוב תאריך
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -47,11 +47,11 @@ public class PotentialPartnerAdapter extends RecyclerView.Adapter<PotentialPartn
         UserProfile user = users.get(position);
         holder.name.setText(user.getName());
 
-        // --- השינוי כאן: מציגים תאריך במקום כתובת ---
+        // ✅ תיקון: שימוש ב-getDefaultMoveDate() במקום getNextMoveDate()
         String infoText;
-        if (user.getNextMoveDate() != null && user.getNextMoveDate() > 0) {
+        if (user.getDefaultMoveDate() != null && user.getDefaultMoveDate() > 0) {
             SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-            String dateStr = sdf.format(new Date(user.getNextMoveDate()));
+            String dateStr = sdf.format(new Date(user.getDefaultMoveDate()));
             infoText = "תאריך מעבר: " + dateStr;
         } else {
             infoText = "טרם נקבע תאריך";

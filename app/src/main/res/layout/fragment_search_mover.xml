@@ -12,6 +12,7 @@
         android:text="מצא מוביל"
         android:textSize="24sp"
         android:textStyle="bold"
+        android:textColor="@android:color/black"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"/>
@@ -20,8 +21,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        app:cardCornerRadius="8dp"
-        app:cardElevation="2dp">
+        app:cardCornerRadius="12dp"
+        app:cardElevation="4dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -29,38 +30,68 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <TextView
+                android:text="מאיפה?"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+
             <Button
                 android:id="@+id/btnSourceAddress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📍 בחר כתובת מוצא"
-                android:backgroundTint="#2196F3"
-                android:layout_marginBottom="8dp"/>
+                android:visibility="gone"/>
 
             <TextView
                 android:id="@+id/tvSourceResult"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="לא נבחר"
+                android:text="לחץ לבחירת כתובת מוצא"
+                android:padding="12dp"
+                android:background="#E0E0E0"
                 android:textSize="14sp"
-                android:textColor="#757575"
-                android:layout_marginBottom="16dp"/>
+                android:textColor="#000000"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:text="לאן?"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
 
             <Button
                 android:id="@+id/btnDestAddress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🏁 בחר כתובת יעד"
-                android:backgroundTint="#2196F3"
-                android:layout_marginBottom="8dp"/>
+                android:visibility="gone"/>
 
             <TextView
                 android:id="@+id/tvDestResult"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="לא נבחר"
+                android:text="לחץ לבחירת כתובת יעד"
+                android:padding="12dp"
+                android:background="#E0E0E0"
                 android:textSize="14sp"
-                android:textColor="#757575"
+                android:textColor="#000000"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:text="מתי?"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+
+            <Button
+                android:id="@+id/btnSelectDate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📅 בחר תאריך הובלה"
+                android:backgroundTint="#FF9800"
+                android:textColor="@color/white"
                 android:layout_marginBottom="16dp"/>
 
             <Button
@@ -69,7 +100,11 @@
                 android:layout_height="wrap_content"
                 android:text="🔍 חפש מובילים מתאימים"
                 android:backgroundTint="#4CAF50"
-                android:enabled="false"/> </LinearLayout>
+                android:padding="12dp"
+                android:textSize="16sp"
+                android:enabled="false"/>
+
+        </LinearLayout>
     </androidx.cardview.widget.CardView>
 
     <androidx.recyclerview.widget.RecyclerView

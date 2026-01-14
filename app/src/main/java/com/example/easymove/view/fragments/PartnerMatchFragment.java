@@ -4,8 +4,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout; // הוספנו
-import android.widget.TextView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -24,7 +23,6 @@ public class PartnerMatchFragment extends Fragment {
 
     private PartnerMatchViewModel viewModel;
     private RecyclerView rvPotential, rvIncoming;
-    // מחקנו את tvIncomingTitle כי הוא עכשיו בתוך ה-Layout הכללי
     private SearchView searchView;
     private PotentialPartnerAdapter partnerAdapter;
     private IncomingRequestAdapter requestAdapter;
@@ -47,7 +45,7 @@ public class PartnerMatchFragment extends Fragment {
         searchView = view.findViewById(R.id.searchViewPartners);
 
         setupAdapters();
-        observeViewModel(); // <--- כאן מתבצעת ההאזנה
+        observeViewModel();
 
         // מאזין לחיפוש
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
@@ -97,21 +95,19 @@ public class PartnerMatchFragment extends Fragment {
             partnerAdapter.setUsers(users);
         });
 
-        // --- הנה החלק ששאלת עליו (תיקנתי אותו שיעבוד) ---
+        // הצגה/הסתרה של בקשות נכנסות
         viewModel.getIncomingRequests().observe(getViewLifecycleOwner(), requests -> {
-            // משתמשים ב-getView() כדי למצוא את ה-Layout בתוך הפרגמנט
             View layoutIncoming = getView().findViewById(R.id.layoutIncoming);
 
-            if (layoutIncoming != null) { // בדיקת בטיחות
+            if (layoutIncoming != null) {
                 if (requests != null && !requests.isEmpty()) {
-                    layoutIncoming.setVisibility(View.VISIBLE); // מציגים את הבלוק
+                    layoutIncoming.setVisibility(View.VISIBLE);
                     requestAdapter.setRequests(requests);
                 } else {
-                    layoutIncoming.setVisibility(View.GONE); // מסתירים
+                    layoutIncoming.setVisibility(View.GONE);
                 }
             }
         });
-        // --------------------------------------------------
 
         viewModel.getToastMessage().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();

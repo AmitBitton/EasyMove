@@ -1,19 +1,30 @@
 package com.example.easymove.model;
 
 public class MatchRequest {
-    private String requestId;      // מזהה הבקשה (ID של המסמך)
-    private String fromUserId;     // מי שלח
-    private String fromUserName;   // שם השולח (כדי להציג יפה ברשימה)
-    private String toUserId;       // למי נשלח
-    private String status;         // "pending", "accepted", "rejected"
+    private String requestId;
+    private String fromUserId;
+    private String fromUserName;
+    private String toUserId;
+    private String moveId;
+    private String status;         // "pending", "waiting_for_mover", "approved", "rejected"
+    private String partnerAddress; // הכתובת של המקבל (מתמלא באישור)
+
+    // ✅ שדות חדשים: פרטי ההובלה של השולח (כדי שהמקבל ידע למה הוא מסכים)
+    private String originalSourceAddress;
+    private String originalDestAddress;
+
     private long timestamp;
 
-    public MatchRequest() {} // חובה לפיירבייס
+    public MatchRequest() {}
 
-    public MatchRequest(String fromUserId, String fromUserName, String toUserId) {
+    public MatchRequest(String fromUserId, String fromUserName, String toUserId, String moveId,
+                        String source, String dest) {
         this.fromUserId = fromUserId;
         this.fromUserName = fromUserName;
         this.toUserId = toUserId;
+        this.moveId = moveId;
+        this.originalSourceAddress = source;
+        this.originalDestAddress = dest;
         this.status = "pending";
         this.timestamp = System.currentTimeMillis();
     }
@@ -31,8 +42,20 @@ public class MatchRequest {
     public String getToUserId() { return toUserId; }
     public void setToUserId(String toUserId) { this.toUserId = toUserId; }
 
+    public String getMoveId() { return moveId; }
+    public void setMoveId(String moveId) { this.moveId = moveId; }
+
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getPartnerAddress() { return partnerAddress; }
+    public void setPartnerAddress(String partnerAddress) { this.partnerAddress = partnerAddress; }
+
+    public String getOriginalSourceAddress() { return originalSourceAddress; }
+    public void setOriginalSourceAddress(String originalSourceAddress) { this.originalSourceAddress = originalSourceAddress; }
+
+    public String getOriginalDestAddress() { return originalDestAddress; }
+    public void setOriginalDestAddress(String originalDestAddress) { this.originalDestAddress = originalDestAddress; }
 
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }

@@ -1,5 +1,5 @@
 package com.example.easymove.view.activities;
-import android.graphics.Color;
+
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -12,27 +12,19 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.easymove.model.Chat;
-import com.example.easymove.model.repository.ChatRepository;
-import com.example.easymove.model.repository.MoveRepository;
 import com.example.easymove.R;
 import com.example.easymove.adapters.ChatAdapter;
+import com.example.easymove.model.Chat;
 import com.example.easymove.model.Message;
 import com.example.easymove.model.repository.UserRepository;
-import com.google.firebase.Timestamp;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentChange;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
+import com.example.easymove.viewmodel.ChatViewModel;
 
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class ChatActivity extends AppCompatActivity {
 
@@ -40,12 +32,9 @@ public class ChatActivity extends AppCompatActivity {
     private String currentUserId;
     private String currentUserName;
 
-    private FirebaseFirestore db;
-    private ChatRepository chatRepository;
-    private MoveRepository moveRepository;
-    private ChatAdapter adapter;
-    private List<Message> messageList;
+    private ChatViewModel chatViewModel; // ✅ ViewModel במקום Repositories ישירים
 
+    private ChatAdapter adapter;
     private EditText editInput;
     private RecyclerView recyclerView;
     private TextView tvTitle;
@@ -58,77 +47,101 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        android.view.View view = getLayoutInflater().inflate(R.layout.activity_chat, null);
-        setContentView(view);
-        // 1. קבלת נתונים
-        chatId = getIntent().getStringExtra("CHAT_ID");
-        currentUserId = FirebaseAuth.getInstance().getUid();
+        setContentView(R.layout.activity_chat);
 
-        if (chatId == null || currentUserId == null) {
+        chatId = getIntent().getStringExtra("CHAT_ID");
+        if (chatId == null) {
             Toast.makeText(this, "שגיאה בטעינת הצ'אט", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        db = FirebaseFirestore.getInstance();
-        chatRepository = new ChatRepository();
-        moveRepository = new MoveRepository();
-        // טעינת השם שלי (לשליחת הודעות)
+        // אתחול ה-ViewModel
+        chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
+        currentUserId = chatViewModel.getCurrentUserId();
+
+        if (currentUserId == null) {
+            finish();
+            return;
+        }
+
+        // טעינת שם המשתמש (לצורך שליחת הודעות)
         new UserRepository().getUserNameById(currentUserId).addOnSuccessListener(name -> {
             currentUserName = name;
         });
 
         initViews();
         setupRecyclerView();
-        listenForChatHeader();
-        listenForMessages(); // האזנה בזמן אמת
+        observeViewModel(); // ✅ האזנה לשינויים מה-ViewModel
+
+        // התחלת האזנה לצ'אט הספציפי הזה
+        chatViewModel.startListening(chatId);
     }
 
     private void initViews() {
         Toolbar toolbar = findViewById(R.id.toolbarChat);
         setSupportActionBar(toolbar);
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true); // כפתור חזור
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
         toolbar.setNavigationOnClickListener(v -> finish());
 
         tvTitle = findViewById(R.id.tvChatTitle);
-        tvTitle.setText("צ'אט"); // אפשר להעביר גם את שם הצד השני ב-Intent ולשים כאן
+        tvTitle.setText("צ'אט");
 
         editInput = findViewById(R.id.editMessageInput);
         ImageButton btnSend = findViewById(R.id.btnSendMessage);
         recyclerView = findViewById(R.id.recyclerChat);
 
-        btnSend.setOnClickListener(v -> sendMessage());
         layoutConfirmMove = findViewById(R.id.layoutConfirmMove);
         tvConfirmStatus = findViewById(R.id.tvConfirmStatus);
         btnConfirmMove = findViewById(R.id.btnConfirmMove);
 
+        btnSend.setOnClickListener(v -> sendMessage());
         btnConfirmMove.setOnClickListener(v -> onConfirmClicked());
     }
 
     private void setupRecyclerView() {
-        messageList = new ArrayList<>();
         adapter = new ChatAdapter(currentUserId);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
     }
-    private void listenForChatHeader() {
-        db.collection("chats").document(chatId)
-                .addSnapshotListener((snapshot, error) -> {
-                    if (error != null) return;
-                    if (snapshot == null || !snapshot.exists()) return;
 
-                    currentChat = snapshot.toObject(Chat.class);
-                    if (currentChat == null) return;
+    private void observeViewModel() {
+        // 1. האזנה להודעות חדשות
+        chatViewModel.getMessages().observe(this, messages -> {
+            if (messages != null) {
+                adapter.setMessages(messages);
+                if (!messages.isEmpty()) {
+                    recyclerView.scrollToPosition(messages.size() - 1);
+                }
+            }
+        });
 
-                    currentChat.setCurrentUserId(currentUserId);
-                    String title = currentChat.getChatTitle();
-                    if (title != null && !title.trim().isEmpty()) {
-                        tvTitle.setText(title);
-                    }
+        // 2. האזנה לשינויים בסטטוס הצ'אט (כותרת, אישורים)
+        chatViewModel.getChatMetadata().observe(this, chat -> {
+            if (chat != null) {
+                currentChat = chat;
+                // עדכון הכותרת עם השם של הצד השני
+                chat.setCurrentUserId(currentUserId);
+                String title = chat.getChatTitle();
+                if (title != null && !title.trim().isEmpty()) {
+                    tvTitle.setText(title);
+                }
 
-                    updateConfirmCardUi(currentChat);
-                });
+                // עדכון כרטיס התיאום
+                updateConfirmCardUi(chat);
+            }
+        });
+
+        // 3. האזנה להודעות טוסט (שגיאות או הצלחות)
+        chatViewModel.getToastMessage().observe(this, msg -> {
+            if (msg != null && !msg.isEmpty()) {
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
+
     private void updateConfirmCardUi(Chat chat) {
         boolean isMover = currentUserId.equals(chat.getMoverId());
         boolean isCustomer = currentUserId.equals(chat.getCustomerId());
@@ -141,7 +154,6 @@ public class ChatActivity extends AppCompatActivity {
         boolean moverConfirmed = chat.isMoverConfirmed();
         boolean customerConfirmed = chat.isCustomerConfirmed();
 
-        // לוגיקה מעודכנת להצגת הכפתור
         if (isMover) {
             layoutConfirmMove.setVisibility(View.VISIBLE);
             if (!moverConfirmed) {
@@ -159,7 +171,7 @@ public class ChatActivity extends AppCompatActivity {
             }
         } else if (isCustomer) {
             if (!moverConfirmed) {
-                layoutConfirmMove.setVisibility(View.GONE); // לקוח לא רואה עד שהמוביל מאשר
+                layoutConfirmMove.setVisibility(View.GONE);
             } else {
                 layoutConfirmMove.setVisibility(View.VISIBLE);
                 if (!customerConfirmed) {
@@ -174,30 +186,21 @@ public class ChatActivity extends AppCompatActivity {
             }
         }
     }
+
     private void onConfirmClicked() {
         if (currentChat == null) return;
 
         boolean isMover = currentUserId.equals(currentChat.getMoverId());
         boolean isCustomer = currentUserId.equals(currentChat.getCustomerId());
 
-        // --- פעולת מוביל (ללא שינוי) ---
         if (isMover) {
             if (currentChat.isMoverConfirmed()) return;
-
             btnConfirmMove.setEnabled(false);
-            chatRepository.setMoverConfirmed(chatId)
-                    .addOnSuccessListener(unused ->
-                            Toast.makeText(this, "אישרת ✅ ממתין ללקוח", Toast.LENGTH_SHORT).show()
-                    )
-                    .addOnFailureListener(e -> {
-                        btnConfirmMove.setEnabled(true);
-                        Toast.makeText(this, "שגיאה: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
-            return;
-        }
 
-        // --- פעולת לקוח (התיקון כאן) ---
-        if (isCustomer) {
+            // ✅ קריאה ל-ViewModel
+            chatViewModel.confirmByMover(chatId);
+
+        } else if (isCustomer) {
             if (!currentChat.isMoverConfirmed()) {
                 Toast.makeText(this, "המוביל חייב לאשר קודם", Toast.LENGTH_SHORT).show();
                 return;
@@ -206,65 +209,18 @@ public class ChatActivity extends AppCompatActivity {
 
             btnConfirmMove.setEnabled(false);
 
-            // ✅ קריאה לפונקציה החדשה בלי כתובות!
-            // המערכת תמצא לבד את ההובלה הפתוחה שלך ותחבר אליה את המוביל
-            moveRepository.confirmMoveByCustomer(
-                    chatId,
-                    currentChat.getMoverId(),
-                    currentUserId
-            ).addOnSuccessListener(unused -> {
-                Toast.makeText(this, "ההובלה תואמה בהצלחה! בדוק את 'ההובלה שלי'", Toast.LENGTH_LONG).show();
-            }).addOnFailureListener(e -> {
-                btnConfirmMove.setEnabled(true);
-                Toast.makeText(this, "שגיאה: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            });
+            // ✅ קריאה ל-ViewModel שמבצע את כל הבדיקות והאישורים
+            chatViewModel.confirmByCustomer(chatId, currentChat.getMoverId(), currentUserId);
         }
-    }
-    private void listenForMessages() {
-        // האזנה לתת-קולקשן "messages" בתוך הצ'אט הספציפי
-        db.collection("chats").document(chatId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
-                .addSnapshotListener((value, error) -> {
-                    if (error != null) return;
-
-                    if (value != null) {
-                        for (DocumentChange change : value.getDocumentChanges()) {
-                            if (change.getType() == DocumentChange.Type.ADDED) {
-                                Message message = change.getDocument().toObject(Message.class);
-                                messageList.add(message);
-                            }
-                        }
-
-                        adapter.setMessages(messageList);
-                        // גלילה למטה להודעה האחרונה
-                        if (!messageList.isEmpty()) {
-                            recyclerView.scrollToPosition(messageList.size() - 1);
-                        }
-                    }
-                });
     }
 
     private void sendMessage() {
         String text = editInput.getText().toString().trim();
         if (TextUtils.isEmpty(text)) return;
 
-        editInput.setText(""); // ניקוי השדה
+        editInput.setText("");
 
-        Timestamp now = new Timestamp(new Date());
-        Message message = new Message(currentUserId, currentUserName, text, now);
-
-        // 1. הוספת ההודעה לקולקשן ההודעות
-        db.collection("chats").document(chatId)
-                .collection("messages")
-                .add(message);
-
-        // 2. עדכון המסמך הראשי של הצ'אט (כדי שיופיע ברשימה הראשית עם ההודעה האחרונה)
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("lastMessage", text);
-        updates.put("lastUpdated", now);
-        updates.put("lastSenderId", currentUserId);
-
-        db.collection("chats").document(chatId).update(updates);
+        // ✅ קריאה ל-ViewModel לשליחת הודעה
+        chatViewModel.sendMessage(chatId, text, currentUserId, currentUserName);
     }
 }

@@ -1,5 +1,6 @@
 package com.example.easymove.view.activities;
 
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -11,15 +12,15 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.app.AlertDialog;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
 
+import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
-import com.example.easymove.model.UserProfile;
-import com.example.easymove.model.repository.MoveRepository;
+import com.example.easymove.viewmodel.AuthViewModel;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -27,31 +28,55 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.SignInButton;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
-import com.google.firebase.auth.AuthCredential;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.GoogleAuthProvider;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
+// --- ייבואים של גוגל מפות ---
+import com.google.android.libraries.places.api.Places;
+import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.widget.Autocomplete;
+import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
+
+import java.util.Arrays;
+import java.util.List;
 
 public class AuthActivity extends AppCompatActivity {
 
+    private AuthViewModel viewModel;
+
     private EditText editEmail, editPassword, editName, editPhone;
+
+    // שדות כתובת למוביל וללקוח
+    private EditText editMoverAddress;
+    private TextView tvSource, tvDest;
+    private LinearLayout layoutMoverRegistration;
+    private LinearLayout layoutCustomerAddresses;
+
     private Button buttonAction;
     private TextView switchModeText, titleText, textUserTypeLabel;
     private RadioGroup radioUserType;
     private RadioButton radioCustomer, radioMover;
-    private LinearLayout layoutMoverRegistration;
-
-    private boolean isLoginMode = true;
-
-    private FirebaseAuth auth;
-    private FirebaseFirestore db;
 
     private SignInButton btnGoogleSignIn;
+
+    private boolean isLoginMode = true;
     private GoogleSignInClient mGoogleSignInClient;
 
-    // --- Launcher להתחברות גוגל ---
+    // --- משתנים לשמירת הכתובות שנבחרו ---
+    // מצבי בחירה: 0=מוביל, 1=לקוח-מוצא, 2=לקוח-יעד
+    private int addressRequestMode = 0;
+
+    // נתוני מוביל
+    private Double moverLat = null;
+    private Double moverLng = null;
+
+    // נתוני לקוח
+    private String selectedSourceAddress = null;
+    private Double selectedSourceLat = null;
+    private Double selectedSourceLng = null;
+
+    private String selectedDestAddress = null;
+    private Double selectedDestLat = null;
+    private Double selectedDestLng = null;
+
+    // --- Launcher לגוגל התחברות ---
     private final ActivityResultLauncher<Intent> googleSignInLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -59,13 +84,45 @@ public class AuthActivity extends AppCompatActivity {
                     Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(result.getData());
                     try {
                         GoogleSignInAccount account = task.getResult(ApiException.class);
-                        if (account != null) {
-                            firebaseAuthWithGoogle(account.getIdToken());
-                        } else {
-                            Toast.makeText(this, "Google sign in failed: account is null", Toast.LENGTH_SHORT).show();
-                        }
+                        viewModel.handleGoogleSignIn(account);
                     } catch (ApiException e) {
-                        Toast.makeText(this, "Google sign in failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Google sign in failed", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+    );
+
+    // ✅ Launcher אחד חכם לכל סוגי הכתובות
+    private final ActivityResultLauncher<Intent> addressLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Place place = Autocomplete.getPlaceFromIntent(result.getData());
+                    if (place.getLatLng() != null) {
+
+                        // בדיקה איזה שדה עדכנו
+                        if (addressRequestMode == 0) {
+                            // מוביל
+                            moverLat = place.getLatLng().latitude;
+                            moverLng = place.getLatLng().longitude;
+                            editMoverAddress.setText(place.getAddress());
+
+                        } else if (addressRequestMode == 1) {
+                            // לקוח - מוצא
+                            selectedSourceLat = place.getLatLng().latitude;
+                            selectedSourceLng = place.getLatLng().longitude;
+                            selectedSourceAddress = place.getAddress(); // או place.getName()
+                            tvSource.setText(selectedSourceAddress);
+                            tvSource.setTextColor(getColor(android.R.color.black));
+
+                        } else if (addressRequestMode == 2) {
+                            // לקוח - יעד
+                            selectedDestLat = place.getLatLng().latitude;
+                            selectedDestLng = place.getLatLng().longitude;
+                            selectedDestAddress = place.getAddress();
+                            tvDest.setText(selectedDestAddress);
+                            tvDest.setTextColor(getColor(android.R.color.black));
+                        }
                     }
                 }
             }
@@ -76,10 +133,13 @@ public class AuthActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_auth);
 
-        auth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
+        // אתחול Places
+        if (!Places.isInitialized()) {
+            Places.initialize(getApplicationContext(), BuildConfig.MAPS_KEY);
+        }
 
-        // --- הגדרות גוגל ---
+        viewModel = new ViewModelProvider(this).get(AuthViewModel.class);
+
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(getString(R.string.default_web_client_id))
                 .requestEmail()
@@ -88,6 +148,7 @@ public class AuthActivity extends AppCompatActivity {
 
         initViews();
         setupListeners();
+        observeViewModel();
         updateMode();
     }
 
@@ -97,21 +158,25 @@ public class AuthActivity extends AppCompatActivity {
         editName = findViewById(R.id.editName);
         editPhone = findViewById(R.id.editPhone);
 
+        // שדות כתובת מוביל
+        layoutMoverRegistration = findViewById(R.id.layoutMoverRegistration);
+        editMoverAddress = findViewById(R.id.editMoverAddress);
+
+        // שדות כתובת לקוח
+        layoutCustomerAddresses = findViewById(R.id.layoutCustomerAddresses);
+        tvSource = findViewById(R.id.tvRegSourceAddress);
+        tvDest = findViewById(R.id.tvRegDestAddress);
+
         textUserTypeLabel = findViewById(R.id.textUserTypeLabel);
         buttonAction = findViewById(R.id.buttonAction);
         switchModeText = findViewById(R.id.switchModeText);
         titleText = findViewById(R.id.textTitle);
-
         radioUserType = findViewById(R.id.radio_user_type);
         radioCustomer = findViewById(R.id.radio_customer);
         radioMover = findViewById(R.id.radio_mover);
 
-        layoutMoverRegistration = findViewById(R.id.layoutMoverRegistration);
-
         btnGoogleSignIn = findViewById(R.id.btnGoogleSignIn);
-        if (btnGoogleSignIn != null) {
-            btnGoogleSignIn.setSize(SignInButton.SIZE_WIDE);
-        }
+        if (btnGoogleSignIn != null) btnGoogleSignIn.setSize(SignInButton.SIZE_WIDE);
     }
 
     private void setupListeners() {
@@ -120,8 +185,15 @@ public class AuthActivity extends AppCompatActivity {
             updateMode();
         });
 
+        // שינוי תצוגה לפי בחירת לקוח/מוביל
         radioUserType.setOnCheckedChangeListener((group, checkedId) -> {
-            layoutMoverRegistration.setVisibility(checkedId == R.id.radio_mover ? View.VISIBLE : View.GONE);
+            if (checkedId == R.id.radio_mover) {
+                layoutMoverRegistration.setVisibility(View.VISIBLE);
+                layoutCustomerAddresses.setVisibility(View.GONE);
+            } else {
+                layoutMoverRegistration.setVisibility(View.GONE);
+                layoutCustomerAddresses.setVisibility(View.VISIBLE);
+            }
         });
 
         buttonAction.setOnClickListener(v -> handleButtonClick());
@@ -130,6 +202,109 @@ public class AuthActivity extends AppCompatActivity {
             Intent signInIntent = mGoogleSignInClient.getSignInIntent();
             googleSignInLauncher.launch(signInIntent);
         });
+
+        // בחירת כתובת מוביל
+        if (editMoverAddress != null) {
+            editMoverAddress.setFocusable(false);
+            editMoverAddress.setClickable(true);
+            editMoverAddress.setOnClickListener(v -> openPlacePicker(0));
+        }
+
+        // בחירת כתובת מוצא לקוח
+        tvSource.setOnClickListener(v -> openPlacePicker(1));
+
+        // בחירת כתובת יעד לקוח
+        tvDest.setOnClickListener(v -> openPlacePicker(2));
+    }
+
+    private void openPlacePicker(int mode) {
+        this.addressRequestMode = mode;
+        List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS);
+        Intent intent = new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).build(this);
+        addressLauncher.launch(intent);
+    }
+
+    private void observeViewModel() {
+        viewModel.getNavigateToMain().observe(this, shouldNavigate -> {
+            if (shouldNavigate) {
+                startActivity(new Intent(this, MainActivity.class));
+                finish();
+            }
+        });
+
+        viewModel.getErrorMessage().observe(this, error -> {
+            if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+        });
+
+        viewModel.getIsLoading().observe(this, isLoading -> {
+            buttonAction.setEnabled(!isLoading);
+            btnGoogleSignIn.setEnabled(!isLoading);
+            if (isLoading) buttonAction.setText("טוען...");
+            else updateMode();
+        });
+
+        viewModel.getShowGoogleTypeDialog().observe(this, this::showCompleteProfileDialog);
+    }
+
+    private void handleButtonClick() {
+        String email = editEmail.getText().toString().trim();
+        String password = editPassword.getText().toString().trim();
+
+        // --- מצב התחברות (Login) ---
+        if (isLoginMode) {
+            if (TextUtils.isEmpty(email)) {
+                editEmail.setError("נא להזין אימייל");
+                return;
+            }
+            if (TextUtils.isEmpty(password)) {
+                editPassword.setError("נא להזין סיסמה");
+                return;
+            }
+            viewModel.login(email, password);
+        }
+
+        // --- מצב הרשמה (Register) ---
+        else {
+            String name = editName.getText().toString().trim();
+            String phone = editPhone.getText().toString().trim();
+
+            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password) || TextUtils.isEmpty(name)) {
+                Toast.makeText(this, "נא למלא את כל שדות החובה", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            boolean isCustomer = radioCustomer.isChecked();
+
+            // ✅ ולידציה ללקוח (שני הכתובות חובה!)
+            if (isCustomer) {
+                if (selectedSourceAddress == null || selectedDestAddress == null) {
+                    Toast.makeText(this, "חובה לבחור כתובת מוצא ויעד להרשמה", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            // ✅ ולידציה למוביל (כתובת בסיס חובה!)
+            else {
+                if (moverLat == null || moverLng == null) {
+                    Toast.makeText(this, "מוביל חייב לבחור כתובת בסיס מהרשימה", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+
+            // הכנת נתונים להעברה
+            // שים לב: אנחנו מעבירים את הנתונים הרלוונטיים לפי סוג המשתמש
+            String addressToSend = isCustomer ? selectedSourceAddress : editMoverAddress.getText().toString();
+            Double latToSend = isCustomer ? selectedSourceLat : moverLat;
+            Double lngToSend = isCustomer ? selectedSourceLng : moverLng;
+
+            // אזהרה: עליך לעדכן את AuthViewModel כך שיקבל גם את נתוני ה-Destination של הלקוח!
+            // כרגע אני מעביר את זה לפונקציה הקיימת, אבל מומלץ להוסיף ל-ViewModel גם destAddress, destLat, destLng
+            // כדי שזה יישמר במקום הנכון (defaultToAddress).
+
+            viewModel.register(email, password, name, phone, isCustomer,
+                    addressToSend, latToSend, lngToSend,
+                    // נתונים נוספים של הלקוח (יש לעדכן את הפונקציה ב-ViewModel לקבל אותם)
+                    selectedDestAddress, selectedDestLat, selectedDestLng);
+        }
     }
 
     private void updateMode() {
@@ -140,6 +315,7 @@ public class AuthActivity extends AppCompatActivity {
             textUserTypeLabel.setVisibility(View.GONE);
             radioUserType.setVisibility(View.GONE);
             layoutMoverRegistration.setVisibility(View.GONE);
+            layoutCustomerAddresses.setVisibility(View.GONE);
             buttonAction.setText("התחבר");
             switchModeText.setText("אין לך חשבון? להרשמה לחצי כאן");
         } else {
@@ -149,181 +325,28 @@ public class AuthActivity extends AppCompatActivity {
             textUserTypeLabel.setVisibility(View.VISIBLE);
             radioUserType.setVisibility(View.VISIBLE);
 
-            if (radioMover.isChecked()) layoutMoverRegistration.setVisibility(View.VISIBLE);
-            else layoutMoverRegistration.setVisibility(View.GONE);
+            // הצגת השדות הנכונים לפי הבחירה הנוכחית ברדיו
+            if (radioCustomer.isChecked()) {
+                layoutCustomerAddresses.setVisibility(View.VISIBLE);
+                layoutMoverRegistration.setVisibility(View.GONE);
+            } else {
+                layoutCustomerAddresses.setVisibility(View.GONE);
+                layoutMoverRegistration.setVisibility(View.VISIBLE);
+            }
 
             buttonAction.setText("הרשמה");
             switchModeText.setText("יש לך כבר חשבון? התחברות");
         }
     }
 
-    private void handleButtonClick() {
-        String email = editEmail.getText().toString().trim();
-        String password = editPassword.getText().toString().trim();
-
-        if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
-            Toast.makeText(this, "נא למלא אימייל וסיסמה", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (isLoginMode) {
-            login(email, password);
-        } else {
-            String name = editName.getText().toString().trim();
-
-            if (TextUtils.isEmpty(name)) {
-                Toast.makeText(this, "נא למלא שם מלא", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            performRegistration(email, password, name);
-        }
-    }
-
-    private void login(String email, String password) {
-        auth.signInWithEmailAndPassword(email, password)
-                .addOnSuccessListener(result -> {
-                    Toast.makeText(this, "התחברת בהצלחה!", Toast.LENGTH_SHORT).show();
-                    checkUserAndStartMain(result.getUser().getUid());
-                })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this, "שגיאה בהתחברות: " + e.getMessage(), Toast.LENGTH_LONG).show()
-                );
-    }
-
-    private void performRegistration(String email, String password, String name) {
-        String phone = editPhone.getText().toString().trim();
-        String userType = radioCustomer.isChecked() ? "customer" : "mover";
-
-        auth.createUserWithEmailAndPassword(email, password)
-                .addOnSuccessListener(result -> {
-                    String uid = result.getUser().getUid();
-
-                    UserProfile profile = new UserProfile();
-                    profile.setUserId(uid);
-                    profile.setName(name);
-                    profile.setPhone(phone);
-                    profile.setUserType(userType);
-
-                    // ✅ בלי מיקום כאן. מקסימום רדיוס שירות למוביל
-                    if ("mover".equals(userType)) {
-                        profile.setServiceRadiusKm(30);
-                    }
-
-                    db.collection("users").document(uid).set(profile)
-                            .addOnSuccessListener(unused -> {
-                                if ("customer".equals(userType)) {
-                                    new MoveRepository()
-                                            .ensureActiveMoveForCustomer(uid)
-                                            .addOnSuccessListener(v -> {
-                                                Toast.makeText(this, "נרשמת בהצלחה!", Toast.LENGTH_SHORT).show();
-                                                startMain();
-                                            })
-                                            .addOnFailureListener(e -> {
-                                                Toast.makeText(this,
-                                                        "נרשמת, אבל לא נוצרה הובלה: " + e.getMessage(),
-                                                        Toast.LENGTH_LONG).show();
-                                                startMain();
-                                            });
-                                } else {
-                                    Toast.makeText(this, "נרשמת בהצלחה!", Toast.LENGTH_SHORT).show();
-                                    startMain();
-                                }
-                            })
-                            .addOnFailureListener(e ->
-                                    Toast.makeText(this,
-                                            "שגיאה בשמירת פרופיל: " + e.getMessage(),
-                                            Toast.LENGTH_LONG).show()
-                            );
-                })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this,
-                                "שגיאה בהרשמה: " + e.getMessage(),
-                                Toast.LENGTH_LONG).show()
-                );
-    }
-
-    private void firebaseAuthWithGoogle(String idToken) {
-        AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
-        auth.signInWithCredential(credential)
-                .addOnCompleteListener(this, task -> {
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = auth.getCurrentUser();
-                        if (user != null) checkUserAndStartMain(user.getUid());
-                    } else {
-                        Toast.makeText(this, "Authentication Failed.", Toast.LENGTH_SHORT).show();
-                    }
-                });
-    }
-
-    private void checkUserAndStartMain(String uid) {
-        db.collection("users").document(uid).get()
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        DocumentSnapshot document = task.getResult();
-                        if (document != null && document.exists()) {
-                            startMain();
-                        } else {
-                            showCompleteProfileDialog(uid);
-                        }
-                    } else {
-                        Toast.makeText(this, "שגיאה בבדיקת פרופיל", Toast.LENGTH_SHORT).show();
-                    }
-                });
-    }
-
+    // ... (פונקציית הדיאלוג נשארת ללא שינוי)
     private void showCompleteProfileDialog(String uid) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("השלמת הרשמה");
-        builder.setMessage("ברוכים הבאים! אנא בחר סוג משתמש להמשך.");
-        builder.setCancelable(false);
-
-        builder.setPositiveButton("אני לקוח", (dialog, which) -> saveGoogleUserProfile(uid, "customer"));
-
-        builder.setNegativeButton("אני מוביל", (dialog, which) -> {
-            Toast.makeText(this, "מוביל נרשם בלי מיקום. אפשר להשלים בפרופיל אחר כך.", Toast.LENGTH_LONG).show();
-            saveGoogleUserProfile(uid, "mover");
-        });
-
-        builder.show();
-    }
-
-    private void saveGoogleUserProfile(String uid, String userType) {
-        FirebaseUser firebaseUser = auth.getCurrentUser();
-
-        UserProfile profile = new UserProfile();
-        profile.setUserId(uid);
-        profile.setName(firebaseUser != null ? firebaseUser.getDisplayName() : null);
-        profile.setPhone(firebaseUser != null ? firebaseUser.getPhoneNumber() : null);
-        profile.setUserType(userType);
-
-        if ("mover".equals(userType)) {
-            profile.setServiceRadiusKm(30);
-        }
-
-        db.collection("users").document(uid).set(profile)
-                .addOnSuccessListener(unused -> {
-                    if ("customer".equals(userType)) {
-                        new MoveRepository()
-                                .ensureActiveMoveForCustomer(uid)
-                                .addOnSuccessListener(v -> startMain())
-                                .addOnFailureListener(e -> {
-                                    Toast.makeText(this,
-                                            "נרשמת, אבל לא נוצרה הובלה: " + e.getMessage(),
-                                            Toast.LENGTH_LONG).show();
-                                    startMain();
-                                });
-                    } else {
-                        startMain();
-                    }
-                })
-                .addOnFailureListener(e ->
-                        Toast.makeText(this, "שגיאה בשמירה: " + e.getMessage(), Toast.LENGTH_SHORT).show()
-                );
-    }
-
-    private void startMain() {
-        startActivity(new Intent(this, MainActivity.class));
-        finish();
+        new AlertDialog.Builder(this)
+                .setTitle("השלמת הרשמה")
+                .setMessage("ברוכים הבאים! אנא בחר סוג משתמש להמשך.")
+                .setCancelable(false)
+                .setPositiveButton("אני לקוח", (dialog, which) -> viewModel.completeGoogleRegistration(uid, "customer"))
+                .setNegativeButton("אני מוביל", (dialog, which) -> viewModel.completeGoogleRegistration(uid, "mover"))
+                .show();
     }
 }

@@ -1,35 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5"
     android:layoutDirection="rtl">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerInventory"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingBottom="80dp"
-        android:clipToPadding="false"/>
+        android:orientation="vertical"
+        android:padding="16dp">
 
-    <TextView
-        android:id="@+id/textEmptyInventory"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:text="עדיין אין פריטים ברשימה"
-        android:textSize="18sp"
-        android:visibility="gone"/>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2"
+            android:layout_marginBottom="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSort"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="מיון"
+                android:layout_marginEnd="4dp"
+                app:icon="@android:drawable/ic_menu_sort_by_size"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFilter"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="סינון"
+                android:layout_marginStart="4dp"
+                app:icon="@android:drawable/ic_menu_search"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvActiveFilters"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="מציג הכל"
+            android:textSize="12sp"
+            android:textColor="#757575"
+            android:visibility="gone"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/textEmptyInventory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="אין פריטים במלאי"
+            android:layout_gravity="center"
+            android:textSize="18sp"
+            android:visibility="gone"
+            android:layout_marginTop="50dp"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerInventory"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+    </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabAddItem"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|start"
-        android:layout_margin="24dp"
+        android:layout_margin="16dp"
         android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="#4CAF50"
-        app:tint="@android:color/white"/>
+        app:tint="@android:color/white" />
 
-</FrameLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
