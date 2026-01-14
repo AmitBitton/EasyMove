@@ -180,7 +180,6 @@ public class UserProfile {
     }
 
 
-    //delete if not use on gemini code
     private Long nextMoveDate;
     public Long getNextMoveDate() { return nextMoveDate; }
     public void setNextMoveDate(Long nextMoveDate) { this.nextMoveDate = nextMoveDate; }
