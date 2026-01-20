@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="8dp"
+    android:layoutDirection="rtl"
     app:cardCornerRadius="12dp"
     app:cardElevation="4dp">
 
@@ -121,6 +122,7 @@
                     android:layout_height="wrap_content"
                     android:text="פרטים מלאים"/>
 
+                <!-- נקודה אדומה לבקשת שותף -->
                 <View
                     android:id="@+id/viewNotificationBadge"
                     android:layout_width="12dp"
@@ -132,6 +134,19 @@
                     android:layout_marginEnd="4dp"
                     android:visibility="gone"
                     tools:visibility="visible"/>
+
+                <!-- נקודה אדומה לבקשת ביטול -->
+                <View
+                    android:id="@+id/viewCancelBadge"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/red_circle"
+                    android:layout_gravity="top|start"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginStart="4dp"
+                    android:visibility="gone"
+                    tools:visibility="visible"/>
+
             </FrameLayout>
 
             <Button

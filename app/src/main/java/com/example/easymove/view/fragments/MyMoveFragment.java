@@ -36,7 +36,6 @@ public class MyMoveFragment extends Fragment {
     private TextView textNoMove;
     private CardView cardMoveDetails;
     private TextView textFrom, textTo, textDate;
-    // ✅ שדות חדשים
     private TextView tvPartnerInfo, tvIntermediateAddress;
 
     private Button btnViewItems, btnAddPartner;
@@ -210,14 +209,8 @@ public class MyMoveFragment extends Fragment {
             }
         });
 
-        btnCancelMove.setOnClickListener(v -> {
-            new AlertDialog.Builder(getContext())
-                    .setTitle("ביטול הובלה")
-                    .setMessage("האם את בטוחה שברצונך לבטל את ההובלה?")
-                    .setPositiveButton("כן, בטל", (d, w) -> viewModel.cancelCurrentMove())
-                    .setNegativeButton("לא", null)
-                    .show();
-        });
+        btnCancelMove.setOnClickListener(v -> onCancelClicked());
+
 
         btnViewItems.setOnClickListener(v -> {
             getParentFragmentManager()
@@ -257,4 +250,44 @@ public class MyMoveFragment extends Fragment {
                 .setNegativeButton("לא, ההובלה נדחתה", null)
                 .show();
     }
+
+    private void onCancelClicked() {
+        MoveRequest move = viewModel.getCurrentMove().getValue();
+        if (move == null) return;
+
+        String myId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+        if (myId == null) return;
+
+        boolean iAmPartner = myId.equals(move.getPartnerId());
+        boolean iAmCustomer = myId.equals(move.getCustomerId());
+
+        String title = "ביטול";
+        String message;
+
+        if (iAmPartner) {
+            message = "ביטול שותפות יחזיר את ההובלה למצב רגיל ללא שותף. להמשיך?";
+        } else if (iAmCustomer) {
+            long now = System.currentTimeMillis();
+            long weekMs = 7L * 24L * 60L * 60L * 1000L;
+            long moveDate = move.getMoveDate();
+
+            boolean needsMoverApproval = (moveDate > 0) && ((moveDate - now) < weekMs);
+
+            if (needsMoverApproval) {
+                message = "הביטול מתבצע פחות משבוע מראש ולכן נדרש אישור מהמוביל. לשלוח בקשת ביטול?";
+            } else {
+                message = "האם את בטוחה שברצונך לבטל את ההובלה?";
+            }
+        } else {
+            message = "אין לך הרשאה לבטל את ההובלה הזו.";
+        }
+
+        new AlertDialog.Builder(getContext())
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton("כן", (d, w) -> viewModel.cancelMoveWithPolicy())
+                .setNegativeButton("לא", null)
+                .show();
+    }
+
 }

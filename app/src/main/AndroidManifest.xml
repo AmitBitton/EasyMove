@@ -40,7 +40,10 @@
 
         <activity
             android:name=".view.activities.MainActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+        />
+
 
         <activity
             android:name=".view.activities.ChatActivity"

@@ -156,6 +156,15 @@
             </LinearLayout>
         </LinearLayout>
     </androidx.cardview.widget.CardView>
+    <Button
+        android:id="@+id/bsBtnApproveCancel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="✅ אשר ביטול הובלה"
+        android:visibility="gone"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="#E53935"
+        android:textColor="@android:color/white"/>
 
     <Button
         android:id="@+id/bsBtnClose"

@@ -532,16 +532,44 @@ public class ProfileFragment extends Fragment {
         updateUiMode();
     }
 
-    private void updateUiMode() {
-        // רענון נראות כפתורים ושדות
-        editName.setEnabled(isEditMode);
-        editPhone.setEnabled(isEditMode);
+//    private void updateUiMode() {
+//        // רענון נראות כפתורים ושדות
+//        editName.setEnabled(isEditMode);
+//        editPhone.setEnabled(isEditMode);
+//
+//        buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
+//        layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+//
+//        if (currentUserProfile != null) {
+//            fillUiFromProfile(currentUserProfile);
+//        }
+//    }
+private void updateUiMode() {
+    // שדות בסיס
+    editName.setEnabled(isEditMode);
+    editPhone.setEnabled(isEditMode);
 
-        buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
-        layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+    // כפתורים
+    buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
+    layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
 
-        if (currentUserProfile != null) {
-            fillUiFromProfile(currentUserProfile);
-        }
+    // ✅ מוביל: לאפשר עריכת "אודות"
+    if (currentUserProfile != null && "mover".equals(currentUserProfile.getUserType())) {
+        editAbout.setEnabled(isEditMode);
+        editAbout.setFocusable(isEditMode);
+        editAbout.setFocusableInTouchMode(isEditMode);
     }
+
+    // ✅ לקוח: קומה/דירה
+    if (currentUserProfile != null && !"mover".equals(currentUserProfile.getUserType())) {
+        editFloor.setEnabled(isEditMode);
+        editApartment.setEnabled(isEditMode);
+    }
+
+    // רענון UI לפי סוג משתמש
+    if (currentUserProfile != null) {
+        fillUiFromProfile(currentUserProfile);
+    }
+}
+
 }

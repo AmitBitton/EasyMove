@@ -69,6 +69,13 @@ public class MyDeliveriesFragment extends Fragment {
                         viewModel.rejectPartner(req);
                         Toast.makeText(getContext(), "הבקשה נדחתה", Toast.LENGTH_SHORT).show();
                     }
+
+                    @Override
+                    public void onApproveCancel(MoveRequest move) {
+                        String moverId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+                        viewModel.approveCancel(move, moverId);
+                        Toast.makeText(getContext(), "הביטול אושר ✅", Toast.LENGTH_SHORT).show();
+                    }
                 });
 
                 bottomSheet.show(getParentFragmentManager(), "MoveDetails");

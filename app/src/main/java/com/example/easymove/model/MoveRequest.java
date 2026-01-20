@@ -33,6 +33,52 @@ public class MoveRequest implements Serializable {
 
     @PropertyName("moveDate")
     private long moveDate;
+    // Cancellation request fields (mover approval flow)
+    @PropertyName("cancelRequestPending")
+    private Boolean cancelRequestPending;
+
+    @PropertyName("cancelRequestedAt")
+    private Long cancelRequestedAt;
+
+    @PropertyName("cancelRequestedBy")
+    private String cancelRequestedBy;
+
+    @PropertyName("cancelApprovedAt")
+    private Long cancelApprovedAt;
+
+    @PropertyName("cancelApprovedBy")
+    private String cancelApprovedBy;
+
+    // Getters & Setters
+    @PropertyName("cancelRequestPending")
+    public Boolean getCancelRequestPending() { return cancelRequestPending; }
+
+    @PropertyName("cancelRequestPending")
+    public void setCancelRequestPending(Boolean cancelRequestPending) { this.cancelRequestPending = cancelRequestPending; }
+
+    @PropertyName("cancelRequestedAt")
+    public Long getCancelRequestedAt() { return cancelRequestedAt; }
+
+    @PropertyName("cancelRequestedAt")
+    public void setCancelRequestedAt(Long cancelRequestedAt) { this.cancelRequestedAt = cancelRequestedAt; }
+
+    @PropertyName("cancelRequestedBy")
+    public String getCancelRequestedBy() { return cancelRequestedBy; }
+
+    @PropertyName("cancelRequestedBy")
+    public void setCancelRequestedBy(String cancelRequestedBy) { this.cancelRequestedBy = cancelRequestedBy; }
+
+    @PropertyName("cancelApprovedAt")
+    public Long getCancelApprovedAt() { return cancelApprovedAt; }
+
+    @PropertyName("cancelApprovedAt")
+    public void setCancelApprovedAt(Long cancelApprovedAt) { this.cancelApprovedAt = cancelApprovedAt; }
+
+    @PropertyName("cancelApprovedBy")
+    public String getCancelApprovedBy() { return cancelApprovedBy; }
+
+    @PropertyName("cancelApprovedBy")
+    public void setCancelApprovedBy(String cancelApprovedBy) { this.cancelApprovedBy = cancelApprovedBy; }
 
     private String status;
     private String notes;

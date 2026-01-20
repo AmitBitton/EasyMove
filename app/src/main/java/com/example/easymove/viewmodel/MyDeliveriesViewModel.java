@@ -28,6 +28,56 @@ public class MyDeliveriesViewModel extends ViewModel {
     public LiveData<List<MoveRequest>> getDeliveries() { return deliveries; }
     public LiveData<Map<String, MatchRequest>> getActiveRequestsMap() { return activeRequestsMap; }
 
+    //    public void loadMyDeliveries() {
+//        String currentUserId = moveRepository.getCurrentUserId();
+//        if (currentUserId == null) {
+//            deliveries.setValue(null);
+//            return;
+//        }
+//
+//        if (listenerRegistration != null) listenerRegistration.remove();
+//
+//        listenerRegistration = moveRepository.listenToMoverConfirmedMoves(currentUserId, (value, error) -> {
+//            if (error != null) return;
+//            if (value != null) {
+//                List<MoveRequest> list = value.toObjects(MoveRequest.class);
+//                deliveries.setValue(list);
+//                listenForPartnerRequests(list);
+//            }
+//        });
+//    }
+//    public void loadMyDeliveries() {
+//        String currentUserId = moveRepository.getCurrentUserId();
+//        if (currentUserId == null) {
+//            deliveries.setValue(null);
+//            return;
+//        }
+//
+//        if (listenerRegistration != null) listenerRegistration.remove();
+//
+//        listenerRegistration = moveRepository.listenToMoverConfirmedMoves(currentUserId, (value, error) -> {
+//            if (error != null) return;
+//            if (value != null) {
+//
+//                // Build list manually to include Firestore document ID
+//                List<MoveRequest> list = new java.util.ArrayList<>();
+//                for (com.google.firebase.firestore.DocumentSnapshot doc : value.getDocuments()) {
+//                    MoveRequest move = doc.toObject(MoveRequest.class);
+//                    if (move != null) {
+//                        // Don't override an existing "id" field coming from Firestore mapping
+//                        if (move.getId() == null || move.getId().isEmpty()) {
+//                            move.setId(doc.getId());
+//                        }
+//                        list.add(move);
+//                    }
+//
+//                }
+//
+//                deliveries.setValue(list);
+//                listenForPartnerRequests(list);
+//            }
+//        });
+//    }
     public void loadMyDeliveries() {
         String currentUserId = moveRepository.getCurrentUserId();
         if (currentUserId == null) {
@@ -40,7 +90,17 @@ public class MyDeliveriesViewModel extends ViewModel {
         listenerRegistration = moveRepository.listenToMoverConfirmedMoves(currentUserId, (value, error) -> {
             if (error != null) return;
             if (value != null) {
-                List<MoveRequest> list = value.toObjects(MoveRequest.class);
+
+                List<MoveRequest> list = new java.util.ArrayList<>();
+                for (com.google.firebase.firestore.DocumentSnapshot doc : value.getDocuments()) {
+                    MoveRequest move = doc.toObject(MoveRequest.class);
+                    if (move != null) {
+                        // Always use Firestore document id as the move id
+                        move.setId(doc.getId());
+                        list.add(move);
+                    }
+                }
+
                 deliveries.setValue(list);
                 listenForPartnerRequests(list);
             }
@@ -85,6 +145,18 @@ public class MyDeliveriesViewModel extends ViewModel {
 
     public void rejectPartner(MatchRequest req) {
         moveRepository.rejectAndDeleteRequest(req.getRequestId());
+    }
+
+    // ✅ חדש: אישור ביטול ע"י מוביל
+    public void approveCancel(MoveRequest move, String moverId) {
+        if (move == null || moverId == null) return;
+
+        moveRepository.approveCancelMoveByMover(
+                move.getId(),
+                move.getChatId(),
+                move.getCustomerId(),
+                moverId
+        );
     }
 
     @Override
