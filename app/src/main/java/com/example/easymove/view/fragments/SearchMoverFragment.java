@@ -18,6 +18,8 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.example.easymove.view.fragments.MoverReviewsFragment;
+
 
 import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
@@ -346,8 +348,25 @@ public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceStat
 
     @Override
     public void onReviewsClick(UserProfile mover) {
-        Toast.makeText(getContext(), "חלון ביקורות (ימומש בהמשך)", Toast.LENGTH_SHORT).show();
+
+        String moverId = mover.getUserId();
+        String moverName = mover.getName();
+
+        if (moverId == null || moverId.trim().isEmpty()) {
+            Toast.makeText(getContext(), "שגיאה: חסר moverId", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        MoverReviewsFragment fragment = MoverReviewsFragment.newInstance(moverId, moverName);
+
+        requireActivity().getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, fragment)
+                .addToBackStack(null)
+                .commit();
     }
+
+
 
     @Override
     public void onReportClick(UserProfile mover) {

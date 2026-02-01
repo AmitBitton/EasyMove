@@ -8,6 +8,8 @@ public class MoveRequest implements Serializable {
     private String customerId;
     private String partnerId;       // קיים, אבל עכשיו נשתמש בו
     private String moverId;
+    private String moverName;
+
     private String chatId;
     private boolean confirmed;
     private long createdAt;
@@ -151,5 +153,9 @@ public class MoveRequest implements Serializable {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getNotes() { return notes; }
+
+    public String getMoverName() { return moverName; }
+    public void setMoverName(String moverName) { this.moverName = moverName; }
+
     public void setNotes(String notes) { this.notes = notes; }
 }

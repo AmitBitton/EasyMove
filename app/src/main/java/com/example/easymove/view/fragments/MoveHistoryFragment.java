@@ -4,6 +4,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -11,12 +13,15 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.easymove.R;
-import com.example.easymove.adapters.MoveHistoryAdapter; // ✅ שים לב: עכשיו אנחנו משתמשים באדפטר הנכון
+import com.example.easymove.adapters.MoveHistoryAdapter;
+import com.example.easymove.model.MoveRequest;
+import com.example.easymove.model.UserProfile;
+import com.example.easymove.model.UserSession;
 import com.example.easymove.model.repository.MoveRepository;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 public class MoveHistoryFragment extends Fragment {
 
-    // בנאי שמגדיר את ה-XML של המסך
     public MoveHistoryFragment() {
         super(R.layout.fragment_move_history);
     }
@@ -25,33 +30,50 @@ public class MoveHistoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 1. קישור לרכיבים ב-XML
         RecyclerView recyclerView = view.findViewById(R.id.recyclerHistory);
         TextView tvEmpty = view.findViewById(R.id.tvEmptyHistory);
         ProgressBar progressBar = view.findViewById(R.id.progressBarHistory);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        // 2. יצירת האדפטר
         MoveHistoryAdapter adapter = new MoveHistoryAdapter();
         recyclerView.setAdapter(adapter);
 
-        // 3. הצגת טעינה התחלתית
+        // מאזין לכפתור "הוספת ביקורת"
+        adapter.setOnAddReviewClickListener(move -> {
+            String moverId = move.getMoverId();
+            String moverName = move.getMoverName();
+            String moveId = move.getId();
+
+            if (moverId == null || moverId.trim().isEmpty()) {
+                Toast.makeText(getContext(), "אין מוביל להובלה הזו", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // פותחים את המסך להוספת ביקורת (כרגע בלי שם לקוח - נטפל בזה אחרי שנרוץ)
+            AddReviewFragment fragment =
+                    AddReviewFragment.newInstance(moverId, moverName, moveId);
+
+
+            requireActivity().getSupportFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.fragmentContainer, fragment)
+                    .addToBackStack(null)
+                    .commit();
+        });
+
         progressBar.setVisibility(View.VISIBLE);
         tvEmpty.setVisibility(View.GONE);
 
-        // 4. לוגיקה חכמה: קודם בודקים ב-Session מי המשתמש (לקוח/מוביל)
-        com.example.easymove.model.UserSession.getInstance().ensureStarted()
+        UserSession.getInstance().ensureStarted()
                 .addOnSuccessListener(profile -> {
                     if (profile == null) return;
 
                     String uid = profile.getUserId();
-                    String userType = profile.getUserType(); // נחזיר "customer" או "mover"
+                    String userType = profile.getUserType();
 
-                    // 5. קריאה ל-Repository עם הסוג הנכון
                     new MoveRepository().getMoveHistory(uid, userType)
                             .addOnSuccessListener(moves -> {
-                                // בדיקת הגנה: האם אנחנו עדיין במסך?
                                 if (!isAdded()) return;
 
                                 progressBar.setVisibility(View.GONE);
@@ -63,12 +85,29 @@ public class MoveHistoryFragment extends Fragment {
                                     tvEmpty.setVisibility(View.GONE);
                                     recyclerView.setVisibility(View.VISIBLE);
                                     adapter.setMoves(moves);
+
+                                    // השלמת moverName מתוך users
+                                    FirebaseFirestore db = FirebaseFirestore.getInstance();
+                                    for (MoveRequest m : moves) {
+                                        String mid = m.getMoverId();
+                                        if (mid == null || mid.trim().isEmpty()) continue;
+
+                                        db.collection("users").document(mid).get()
+                                                .addOnSuccessListener(doc -> {
+                                                    if (doc.exists()) {
+                                                        String name = doc.getString("name");
+                                                        if (name != null && !name.trim().isEmpty()) {
+                                                            m.setMoverName(name);
+                                                            adapter.notifyDataSetChanged();
+                                                        }
+                                                    }
+                                                });
+                                    }
                                 }
                             })
                             .addOnFailureListener(e -> {
                                 if (!isAdded()) return;
                                 progressBar.setVisibility(View.GONE);
-                                // Toast.makeText(getContext(), "שגיאה בטעינה", Toast.LENGTH_SHORT).show();
                             });
                 })
                 .addOnFailureListener(e -> {
