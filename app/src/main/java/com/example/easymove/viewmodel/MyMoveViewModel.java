@@ -141,4 +141,38 @@ public class MyMoveViewModel extends ViewModel {
         if (moveListener != null) moveListener.remove();
         if (requestListener != null) requestListener.remove();
     }
+
+    public void cancelMoveWithPolicy() {
+        MoveRequest move = currentMove.getValue();
+        if (move == null) return;
+
+        String myId = repository.getCurrentUserId();
+        if (myId == null) return;
+
+        boolean iAmPartner = myId.equals(move.getPartnerId());
+        boolean iAmCustomer = myId.equals(move.getCustomerId());
+
+        // Partner cancellation: cancel partnership only (no mover approval)
+        if (iAmPartner) {
+            repository.cancelPartnerParticipation(move.getId());
+            return;
+        }
+
+        if (!iAmCustomer) return; // Only the main customer can request/cancel the whole move
+
+        long now = System.currentTimeMillis();
+        long weekMs = 7L * 24L * 60L * 60L * 1000L;
+
+        // If moveDate is unknown, treat as "can cancel immediately" (you can change this rule if you want)
+        long moveDate = move.getMoveDate();
+
+        if (moveDate == 0 || (moveDate - now) >= weekMs) {
+            // Cancel immediately using existing logic
+            repository.cancelMoveAndResetChat(move.getId(), move.getChatId(), move.getCustomerId());
+        } else {
+            // Less than a week -> request mover approval
+            repository.requestCancelMoveByCustomer(move.getId(), move.getCustomerId());
+        }
+    }
+
 }

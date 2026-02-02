@@ -18,6 +18,8 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.example.easymove.view.fragments.MoverReviewsFragment;
+
 
 import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
@@ -42,6 +44,9 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
     private UserViewModel userViewModel;
     private ChatViewModel chatViewModel;
     private MoversAdapter adapter;
+    private Button btnFillFromProfile;
+    private UserProfile myProfile;
+
 
     private TextView tvSource, tvDest;
     private Button btnSearch;
@@ -75,102 +80,210 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         return inflater.inflate(R.layout.fragment_search_mover, container, false);
     }
 
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
+//    @Override
+//    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+//        super.onViewCreated(view, savedInstanceState);
+//
+//        // אתחול מפות גוגל
+//        if (!Places.isInitialized()) {
+//            Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
+//        }
+//
+//        // אתחול ViewModels
+//        userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
+//        chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
+//
+//        // חיבור ל-XML
+//        tvSource = view.findViewById(R.id.tvSourceResult); // הטקסט שרואים
+//        tvDest = view.findViewById(R.id.tvDestResult);     // הטקסט שרואים
+//        btnSearch = view.findViewById(R.id.btnSearchAction);
+//        btnSelectDate = view.findViewById(R.id.btnSelectDate);
+//
+//        RecyclerView recycler = view.findViewById(R.id.recyclerMovers);
+//        recycler.setLayoutManager(new LinearLayoutManager(getContext()));
+//
+//        adapter = new MoversAdapter(this);
+//        recycler.setAdapter(adapter);
+//
+//        // --- מאזינים לכפתורים (התיקון כאן!) ---
+//
+//        // ✅ מאזינים ל-TextView עצמו (במקום לכפתור המוסתר btnSourceAddress)
+//        tvSource.setOnClickListener(v -> {
+//            isSelectingSource = true;
+//            openPlacePicker();
+//        });
+//
+//        // ✅ מאזינים ל-TextView עצמו (במקום לכפתור המוסתר btnDestAddress)
+//        tvDest.setOnClickListener(v -> {
+//            isSelectingSource = false;
+//            openPlacePicker();
+//        });
+//
+//        // בחירת תאריך
+//        btnSelectDate.setOnClickListener(v -> {
+//            Calendar calendar = Calendar.getInstance();
+//            new DatePickerDialog(getContext(), (view1, year, month, dayOfMonth) -> {
+//                Calendar chosen = Calendar.getInstance();
+//                chosen.set(year, month, dayOfMonth);
+//                selectedDate = chosen.getTimeInMillis();
+//
+//                // עדכון הטקסט על הכפתור
+//                btnSelectDate.setText(dayOfMonth + "/" + (month + 1) + "/" + year);
+//            },
+//                    calendar.get(Calendar.YEAR),
+//                    calendar.get(Calendar.MONTH),
+//                    calendar.get(Calendar.DAY_OF_MONTH)).show();
+//        });
+//
+//        btnSearch.setOnClickListener(v -> performSearch());
+//
+//        // --- האזנה לנתונים (Observers) ---
+//
+//        // 1. תוצאות חיפוש
+//        userViewModel.getMoversListLiveData().observe(getViewLifecycleOwner(), movers -> {
+//            adapter.setMovers(movers);
+//            if (hasSearched && movers.isEmpty()) {
+//                Toast.makeText(getContext(), "לא נמצאו מובילים ברדיוס הקרוב", Toast.LENGTH_LONG).show();
+//            }
+//        });
+//
+//        // 2. האזנה לשמירת פרטי ההובלה
+//        userViewModel.getMoveDetailsSaved().observe(getViewLifecycleOwner(), saved -> {
+//            if (saved != null && saved) {
+//                if (selectedMoverForChat != null) {
+//                    chatViewModel.startChatWithMover(selectedMoverForChat);
+//                    selectedMoverForChat = null;
+//                }
+//            }
+//        });
+//
+//        // 3. האזנה לפתיחת הצ'אט
+//        chatViewModel.getNavigateToChatId().observe(getViewLifecycleOwner(), chatId -> {
+//            if (chatId != null) {
+//                chatViewModel.onChatNavigated();
+//                Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
+//                intent.putExtra("CHAT_ID", chatId);
+//                startActivity(intent);
+//            }
+//        });
+//
+//        // הצגת שגיאות
+//        userViewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), error -> {
+//            if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
+//        });
+//
+//        chatViewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
+//            if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
+//        });
+//    }
+@Override
+public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    super.onViewCreated(view, savedInstanceState);
 
-        // אתחול מפות גוגל
-        if (!Places.isInitialized()) {
-            Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
-        }
-
-        // אתחול ViewModels
-        userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
-        chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
-
-        // חיבור ל-XML
-        tvSource = view.findViewById(R.id.tvSourceResult); // הטקסט שרואים
-        tvDest = view.findViewById(R.id.tvDestResult);     // הטקסט שרואים
-        btnSearch = view.findViewById(R.id.btnSearchAction);
-        btnSelectDate = view.findViewById(R.id.btnSelectDate);
-
-        RecyclerView recycler = view.findViewById(R.id.recyclerMovers);
-        recycler.setLayoutManager(new LinearLayoutManager(getContext()));
-
-        adapter = new MoversAdapter(this);
-        recycler.setAdapter(adapter);
-
-        // --- מאזינים לכפתורים (התיקון כאן!) ---
-
-        // ✅ מאזינים ל-TextView עצמו (במקום לכפתור המוסתר btnSourceAddress)
-        tvSource.setOnClickListener(v -> {
-            isSelectingSource = true;
-            openPlacePicker();
-        });
-
-        // ✅ מאזינים ל-TextView עצמו (במקום לכפתור המוסתר btnDestAddress)
-        tvDest.setOnClickListener(v -> {
-            isSelectingSource = false;
-            openPlacePicker();
-        });
-
-        // בחירת תאריך
-        btnSelectDate.setOnClickListener(v -> {
-            Calendar calendar = Calendar.getInstance();
-            new DatePickerDialog(getContext(), (view1, year, month, dayOfMonth) -> {
-                Calendar chosen = Calendar.getInstance();
-                chosen.set(year, month, dayOfMonth);
-                selectedDate = chosen.getTimeInMillis();
-
-                // עדכון הטקסט על הכפתור
-                btnSelectDate.setText(dayOfMonth + "/" + (month + 1) + "/" + year);
-            },
-                    calendar.get(Calendar.YEAR),
-                    calendar.get(Calendar.MONTH),
-                    calendar.get(Calendar.DAY_OF_MONTH)).show();
-        });
-
-        btnSearch.setOnClickListener(v -> performSearch());
-
-        // --- האזנה לנתונים (Observers) ---
-
-        // 1. תוצאות חיפוש
-        userViewModel.getMoversListLiveData().observe(getViewLifecycleOwner(), movers -> {
-            adapter.setMovers(movers);
-            if (hasSearched && movers.isEmpty()) {
-                Toast.makeText(getContext(), "לא נמצאו מובילים ברדיוס הקרוב", Toast.LENGTH_LONG).show();
-            }
-        });
-
-        // 2. האזנה לשמירת פרטי ההובלה
-        userViewModel.getMoveDetailsSaved().observe(getViewLifecycleOwner(), saved -> {
-            if (saved != null && saved) {
-                if (selectedMoverForChat != null) {
-                    chatViewModel.startChatWithMover(selectedMoverForChat);
-                    selectedMoverForChat = null;
-                }
-            }
-        });
-
-        // 3. האזנה לפתיחת הצ'אט
-        chatViewModel.getNavigateToChatId().observe(getViewLifecycleOwner(), chatId -> {
-            if (chatId != null) {
-                chatViewModel.onChatNavigated();
-                Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
-                intent.putExtra("CHAT_ID", chatId);
-                startActivity(intent);
-            }
-        });
-
-        // הצגת שגיאות
-        userViewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), error -> {
-            if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
-        });
-
-        chatViewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
-            if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
-        });
+    // אתחול מפות גוגל
+    if (!Places.isInitialized()) {
+        Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
     }
+
+    // אתחול ViewModels
+    userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
+    chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
+
+    // חיבור ל-XML
+    tvSource = view.findViewById(R.id.tvSourceResult); // הטקסט שרואים
+    tvDest = view.findViewById(R.id.tvDestResult);     // הטקסט שרואים
+    btnSearch = view.findViewById(R.id.btnSearchAction);
+    btnSelectDate = view.findViewById(R.id.btnSelectDate);
+
+    // ✅ חדש: כפתור מילוי אוטומטי מהאזור האישי
+    btnFillFromProfile = view.findViewById(R.id.btnFillFromProfile);
+
+    RecyclerView recycler = view.findViewById(R.id.recyclerMovers);
+    recycler.setLayoutManager(new LinearLayoutManager(getContext()));
+
+    adapter = new MoversAdapter(this);
+    recycler.setAdapter(adapter);
+
+    // ✅ חדש: טעינת פרופיל + שמירה מקומית כדי שנוכל למלא אוטומטית
+    userViewModel.loadMyProfile();
+    userViewModel.getMyProfileLiveData().observe(getViewLifecycleOwner(), profile -> {
+        myProfile = profile; // שימי לב: myProfile הוא שדה במחלקה
+    });
+
+    // ✅ חדש: מאזין לכפתור מילוי אוטומטי
+    btnFillFromProfile.setOnClickListener(v -> fillFromProfile());
+
+    // --- מאזינים לכפתורים ---
+
+    // ✅ מאזינים ל-TextView עצמו (במקום לכפתור המוסתר btnSourceAddress)
+    tvSource.setOnClickListener(v -> {
+        isSelectingSource = true;
+        openPlacePicker();
+    });
+
+    // ✅ מאזינים ל-TextView עצמו (במקום לכפתור המוסתר btnDestAddress)
+    tvDest.setOnClickListener(v -> {
+        isSelectingSource = false;
+        openPlacePicker();
+    });
+
+    // בחירת תאריך
+    btnSelectDate.setOnClickListener(v -> {
+        Calendar calendar = Calendar.getInstance();
+        new DatePickerDialog(getContext(), (view1, year, month, dayOfMonth) -> {
+            Calendar chosen = Calendar.getInstance();
+            chosen.set(year, month, dayOfMonth);
+            selectedDate = chosen.getTimeInMillis();
+
+            // עדכון הטקסט על הכפתור
+            btnSelectDate.setText(dayOfMonth + "/" + (month + 1) + "/" + year);
+        },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)).show();
+    });
+
+    btnSearch.setOnClickListener(v -> performSearch());
+
+    // --- האזנה לנתונים (Observers) ---
+
+    // 1. תוצאות חיפוש
+    userViewModel.getMoversListLiveData().observe(getViewLifecycleOwner(), movers -> {
+        adapter.setMovers(movers);
+        if (hasSearched && movers.isEmpty()) {
+            Toast.makeText(getContext(), "לא נמצאו מובילים ברדיוס הקרוב", Toast.LENGTH_LONG).show();
+        }
+    });
+
+    // 2. האזנה לשמירת פרטי ההובלה
+    userViewModel.getMoveDetailsSaved().observe(getViewLifecycleOwner(), saved -> {
+        if (saved != null && saved) {
+            if (selectedMoverForChat != null) {
+                chatViewModel.startChatWithMover(selectedMoverForChat);
+                selectedMoverForChat = null;
+            }
+        }
+    });
+
+    // 3. האזנה לפתיחת הצ'אט
+    chatViewModel.getNavigateToChatId().observe(getViewLifecycleOwner(), chatId -> {
+        if (chatId != null) {
+            chatViewModel.onChatNavigated();
+            Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
+            intent.putExtra("CHAT_ID", chatId);
+            startActivity(intent);
+        }
+    });
+
+    // הצגת שגיאות
+    userViewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), error -> {
+        if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
+    });
+
+    chatViewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
+        if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
+    });
+}
 
     private void openPlacePicker() {
         List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS);
@@ -226,16 +339,91 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
 
     @Override
     public void onDetailsClick(UserProfile mover) {
-        // ... (הקוד הקיים לפרטים)
+        new android.app.AlertDialog.Builder(getContext())
+                .setTitle("על " + mover.getName())
+                .setMessage(mover.getAbout() != null ? mover.getAbout() : "אין מידע נוסף")
+                .setPositiveButton("סגור", null)
+                .show();
     }
 
     @Override
     public void onReviewsClick(UserProfile mover) {
-        // ...
+
+        String moverId = mover.getUserId();
+        String moverName = mover.getName();
+
+        if (moverId == null || moverId.trim().isEmpty()) {
+            Toast.makeText(getContext(), "שגיאה: חסר moverId", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        MoverReviewsFragment fragment = MoverReviewsFragment.newInstance(moverId, moverName);
+
+        requireActivity().getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, fragment)
+                .addToBackStack(null)
+                .commit();
     }
+
+
 
     @Override
     public void onReportClick(UserProfile mover) {
-        // ...
+        Toast.makeText(getContext(), "דיווח על " + mover.getName() + " נשלח לאדמין", Toast.LENGTH_LONG).show();
     }
+
+    private void fillFromProfile() {
+        if (myProfile == null) {
+            Toast.makeText(getContext(), "הפרופיל עדיין נטען, נסי שוב בעוד רגע", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String from = myProfile.getDefaultFromAddress();
+        String to = myProfile.getDefaultToAddress();
+
+        if (from == null || from.trim().isEmpty() || to == null || to.trim().isEmpty()) {
+            Toast.makeText(getContext(), "בבקשה הגדרי כתובת מוצא ויעד באזור האישי קודם", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // טקסטים
+        tvSource.setText(from);
+        tvDest.setText(to);
+
+        // קואורדינטות
+        Double flt = myProfile.getFromLat();
+        Double fln = myProfile.getFromLng();
+        Double tlt = myProfile.getToLat();
+        Double tln = myProfile.getToLng();
+
+        if (flt == null || fln == null || tlt == null || tln == null) {
+            Toast.makeText(getContext(), "חסרים קואורדינטות לכתובות. בחרי כתובות מחדש באזור האישי.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        sourceLatLng = new LatLng(flt, fln);
+        destLatLng = new LatLng(tlt, tln);
+
+        // תאריך
+        Long date = myProfile.getDefaultMoveDate();
+        if (date != null && date > 0) {
+            selectedDate = date;
+
+            Calendar c = Calendar.getInstance();
+            c.setTimeInMillis(date);
+            int day = c.get(Calendar.DAY_OF_MONTH);
+            int month = c.get(Calendar.MONTH) + 1;
+            int year = c.get(Calendar.YEAR);
+            btnSelectDate.setText(day + "/" + month + "/" + year);
+        } else {
+            // לא חובה, אבל נחמד שיהיה ברור
+            selectedDate = 0;
+            btnSelectDate.setText("📅 בחר תאריך הובלה");
+        }
+
+        btnSearch.setEnabled(true);
+        Toast.makeText(getContext(), "הפרטים מולאו מהאזור האישי", Toast.LENGTH_SHORT).show();
+    }
+
 }

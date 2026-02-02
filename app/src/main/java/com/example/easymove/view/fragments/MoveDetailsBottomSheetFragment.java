@@ -33,6 +33,8 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
     public interface OnActionListener {
         void onApprove(MatchRequest req);
         void onReject(MatchRequest req);
+        // New: mover approves cancellation request
+        void onApproveCancel(MoveRequest move);
     }
 
     // ✅ עדכון שם הפונקציה הסטטית והטיפוס המוחזר
@@ -119,6 +121,18 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
         } else {
             cardPending.setVisibility(View.GONE);
         }
+
+        // ✅ חדש: כפתור “אשר ביטול” מוצג רק אם יש cancelRequestPending=true
+        Button btnApproveCancel = view.findViewById(R.id.bsBtnApproveCancel);
+        boolean cancelPending = move != null
+                && move.getCancelRequestPending() != null
+                && move.getCancelRequestPending();
+
+        btnApproveCancel.setVisibility(cancelPending ? View.VISIBLE : View.GONE);
+        btnApproveCancel.setOnClickListener(v -> {
+            if (listener != null && move != null) listener.onApproveCancel(move);
+            dismiss();
+        });
 
         // כפתור סגירה כללי
         view.findViewById(R.id.bsBtnClose).setOnClickListener(v -> dismiss());

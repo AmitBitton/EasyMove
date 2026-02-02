@@ -82,16 +82,12 @@ public class MoveRepository {
         return batch.commit();
     }
 
-    /**
-     * דחיית בקשה ומחיקתה (ניקוי דאטה כפי שביקשת)
-     */
+
     public Task<Void> rejectAndDeleteRequest(String requestId) {
         return db.collection(COLLECTION_MATCH_REQUESTS).document(requestId).delete();
     }
 
-    // ----------------------------------------------------
-    // שאר הקוד הקיים שלך נשאר ללא שינוי
-    // ----------------------------------------------------
+
 
     public ListenerRegistration listenToMoverConfirmedMoves(String moverId, EventListener<QuerySnapshot> listener) {
         return db.collection(COLLECTION_MOVES)
@@ -265,4 +261,45 @@ public class MoveRepository {
         }
         return moves;
     }
+
+    public Task<Void> requestCancelMoveByCustomer(String moveId, String customerId) {
+        DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+
+        // Mark cancellation as pending approval by mover
+        return moveRef.update(
+                "cancelRequestPending", true,
+                "cancelRequestedAt", System.currentTimeMillis(),
+                "cancelRequestedBy", customerId
+        );
+    }
+
+    public Task<Void> approveCancelMoveByMover(String moveId, String chatId, String customerId, String moverId) {
+        WriteBatch batch = db.batch();
+
+        DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+
+        // Mark approval metadata (optional but useful)
+        batch.update(moveRef,
+                "cancelRequestPending", false,
+                "cancelApprovedAt", System.currentTimeMillis(),
+                "cancelApprovedBy", moverId
+        );
+
+        // Now perform the existing cancellation flow (status=CANCELED + reset chat + reset user defaults)
+        // IMPORTANT: we keep your existing logic as-is
+        return batch.commit().continueWithTask(t -> performCancel(moveId, chatId, customerId));
+    }
+
+    public Task<Void> cancelPartnerParticipation(String moveId) {
+        DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+
+        // Remove partner and intermediate stop, restoring the move to its original state
+        return moveRef.update(
+                "partnerId", null,
+                "intermediateAddress", null,
+                "intermediateLat", null,
+                "intermediateLng", null
+        );
+    }
+
 }
