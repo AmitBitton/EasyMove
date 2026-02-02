@@ -1,4 +1,3 @@
-// ✅ תיקון: הוספת onDocumentDeleted לאימפורט
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
@@ -60,17 +59,14 @@ exports.sendchatnotification = onDocumentCreated("chats/{chatId}/messages/{messa
     return admin.messaging().send(message);
 });
 
-// --- ✅ פונקציה 2: התראה לשותף (יוזר 2) כשיוזר 1 שולח בקשה ---
-// זו הפונקציה ששאלת עליה - היא כבר כתובה נכון!
+// --- פונקציה 2: התראה לשותף (יוזר 2) כשיוזר 1 שולח בקשה ---
 exports.sendPartnerRequestNotification = onDocumentCreated("match_requests/{requestId}", async (event) => {
 
     const snapshot = event.data;
     if (!snapshot) return;
 
     const requestData = snapshot.data();
-    // שליפת שם השולח (יוזר 1)
     const fromUserName = requestData.fromUserName || "משתמש";
-    // זיהוי המקבל (יוזר 2)
     const toUserId = requestData.toUserId;
     const requestId = event.params.requestId;
 
@@ -79,7 +75,6 @@ exports.sendPartnerRequestNotification = onDocumentCreated("match_requests/{requ
     const title = "בקשת שותפות חדשה 🤝";
     const body = `${fromUserName} רוצה לחלוק איתך הובלה! לחץ לפרטים.`;
 
-    // שמירה בהיסטוריה (כדי שיופיע בפרגמנט ההתראות)
     try {
         await admin.firestore().collection("users").doc(toUserId).collection("notifications").add({
             title: title,
@@ -95,7 +90,6 @@ exports.sendPartnerRequestNotification = onDocumentCreated("match_requests/{requ
         console.log("Failed to save notification history:", dbError);
     }
 
-    // שליחת הפוש לטלפון
     const userDoc = await admin.firestore().collection("users").doc(toUserId).get();
     if (!userDoc.exists) return;
 
@@ -290,5 +284,98 @@ exports.sendBookingNotification = onDocumentUpdated("moves/{requestId}", async (
             }
         };
         return admin.messaging().send(payload);
+    }
+}); // <--- התיקון: הוספתי כאן ); שהיו חסרים
+
+// --- פונקציה 6: התראה למוביל על ביטול (או בקשת ביטול) הובלה על ידי לקוח ---
+exports.sendCustomerCancellationNotification = onDocumentUpdated("moves/{moveId}", async (event) => {
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
+    const moveId = event.params.moveId;
+
+    // --- תרחיש א': ביטול מיידי (מעל שבוע) ---
+    // קורה כאשר הסטטוס משתנה ל-CANCELED
+    const isCancelledNow = beforeData.status !== "CANCELED" && afterData.status === "CANCELED";
+
+    // --- תרחיש ב': בקשת ביטול (פחות משבוע) ---
+    // קורה כאשר cancelRequestPending הופך ל-true
+    const isCancelRequested = !beforeData.cancelRequestPending && afterData.cancelRequestPending === true;
+
+    // אם שום דבר רלוונטי לא קרה, יוצאים
+    if (!isCancelledNow && !isCancelRequested) {
+        return;
+    }
+
+    const customerId = afterData.customerId;
+    const moverId = afterData.moverId;
+
+    if (!moverId) {
+        console.log(`Move ${moveId}: No moverId found. Skipping notification.`);
+        return;
+    }
+
+    // שליפת שם הלקוח
+    const customerDoc = await admin.firestore().collection("users").doc(customerId).get();
+    const customerName = customerDoc.exists ? (customerDoc.data().name || "לקוח") : "לקוח";
+
+    let title = "";
+    let body = "";
+    let type = "";
+
+    if (isCancelledNow) {
+        console.log(`Move ${moveId}: Cancelled immediately (more than a week away).`);
+        title = "הובלה בוטלה! ❌";
+        body = `הלקוח ${customerName} ביטל את ההובלה (בוצעה מספיק זמן מראש).`;
+        type = "MOVE_CANCELED";
+    }
+    else if (isCancelRequested) {
+        console.log(`Move ${moveId}: Cancellation requested (less than a week). Waiting for mover approval.`);
+        title = "בקשת ביטול הובלה ⚠️";
+        body = `הלקוח ${customerName} מבקש לבטל את ההובלה הקרובה. נדרש אישור שלך.`;
+        type = "CANCEL_REQUEST_PENDING";
+    }
+
+    // 1. שמירה בהיסטוריית ההתראות של המוביל
+    try {
+        await admin.firestore().collection("users").doc(moverId).collection("notifications").add({
+            title: title,
+            message: body,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            isRead: false,
+            type: type,
+            moveId: moveId
+        });
+        console.log(`Notification history saved for mover ${moverId}.`);
+    } catch (dbError) {
+        console.error(`Failed to save notification history:`, dbError);
+    }
+
+    // 2. שליחת הפוש לטלפון
+    const moverUserDoc = await admin.firestore().collection("users").doc(moverId).get();
+    if (!moverUserDoc.exists) return;
+
+    const fcmToken = moverUserDoc.data().fcmToken;
+    if (!fcmToken) {
+        console.log(`No FCM token for mover ${moverId}.`);
+        return;
+    }
+
+    const message = {
+        token: fcmToken,
+        notification: {
+            title: title,
+            body: body
+        },
+        data: {
+            type: type.toLowerCase(), // "move_canceled" or "cancel_request_pending"
+            moveId: moveId
+        }
+    };
+
+    try {
+        await admin.messaging().send(message);
+        console.log(`Push sent to mover ${moverId}.`);
+    } catch (fcmError) {
+        console.error(`Failed to send push:`, fcmError);
     }
 });

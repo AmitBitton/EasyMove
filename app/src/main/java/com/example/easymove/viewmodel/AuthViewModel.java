@@ -24,13 +24,19 @@ public class AuthViewModel extends ViewModel {
     private final MutableLiveData<Boolean> navigateToMain = new MutableLiveData<>(false);
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
-    private final MutableLiveData<String> showGoogleTypeDialog = new MutableLiveData<>();
+
+    // ✅ משתנה חדש: מחזיק את חשבון הגוגל אם המשתמש חדש וצריך להשלים פרטים
+    private final MutableLiveData<GoogleSignInAccount> googleUserIncomplete = new MutableLiveData<>();
 
     public LiveData<Boolean> getNavigateToMain() { return navigateToMain; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
     public LiveData<Boolean> getIsLoading() { return isLoading; }
-    public LiveData<String> getShowGoogleTypeDialog() { return showGoogleTypeDialog; }
+    public LiveData<GoogleSignInAccount> getGoogleUserIncomplete() { return googleUserIncomplete; }
 
+    // חשיפת מופע ה-Auth למקרה הצורך ב-Activity
+    public FirebaseAuth getAuthInstance() { return auth; }
+
+    // --- התחברות רגילה ---
     public void login(String email, String password) {
         isLoading.setValue(true);
         auth.signInWithEmailAndPassword(email, password)
@@ -44,7 +50,7 @@ public class AuthViewModel extends ViewModel {
                 });
     }
 
-    // ✅ הפונקציה המעודכנת - מקבלת עכשיו גם את נתוני היעד (Destination)
+    // --- הרשמה רגילה (כולל כל הכתובות) ---
     public void register(String email, String password, String name, String phone,
                          boolean isCustomer,
                          String address, Double lat, Double lng,
@@ -55,43 +61,12 @@ public class AuthViewModel extends ViewModel {
         auth.createUserWithEmailAndPassword(email, password)
                 .addOnSuccessListener(result -> {
                     String uid = result.getUser().getUid();
-                    UserProfile user = new UserProfile();
-                    user.setUserId(uid);
-                    user.setName(name);
-                    user.setPhone(phone);
-                    user.setUserType(isCustomer ? "customer" : "mover");
 
-                    if (isCustomer) {
-                        // --- לקוח: שומרים גם מוצא וגם יעד ---
+                    // יצירת פרופיל מלא
+                    UserProfile user = createProfileObject(uid, name, phone, isCustomer ? "customer" : "mover",
+                            address, lat, lng, destAddress, destLat, destLng);
 
-                        // כתובת מוצא
-                        user.setDefaultFromAddress(address);
-                        user.setFromLat(lat);
-                        user.setFromLng(lng);
-
-                        // ✅ כתובת יעד (החדש)
-                        user.setDefaultToAddress(destAddress);
-                        user.setToLat(destLat);
-                        user.setToLng(destLng);
-
-                    } else {
-                        // --- מוביל: שומרים כתובת בסיס ו-GeoHash ---
-                        user.setLat(lat != null ? lat : 0);
-                        user.setLng(lng != null ? lng : 0);
-
-                        // יצירת GeoHash לחיפושים
-                        if (lat != null && lng != null) {
-                            String hash = GeoFireUtils.getGeoHashForLocation(new GeoLocation(lat, lng));
-                            user.setGeohash(hash);
-                        }
-
-                        // שומרים את הכתובת כאיזור שירות ראשוני
-                        List<String> areas = new ArrayList<>();
-                        if (address != null) areas.add(address);
-                        user.setServiceAreas(areas);
-                    }
-
-                    // שמירה במסד הנתונים
+                    // שמירה
                     userRepository.saveMyProfile(user)
                             .addOnSuccessListener(unused -> {
                                 isLoading.setValue(false);
@@ -109,38 +84,46 @@ public class AuthViewModel extends ViewModel {
                 });
     }
 
+    // --- טיפול בכניסה עם גוגל ---
     public void handleGoogleSignIn(GoogleSignInAccount account) {
         isLoading.setValue(true);
         AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
+
         auth.signInWithCredential(credential)
                 .addOnSuccessListener(result -> {
                     String uid = result.getUser().getUid();
-                    // בודקים אם המשתמש קיים ב-Firestore
+
+                    // בדיקה האם המשתמש כבר קיים במערכת (עם פרופיל מלא)
                     userRepository.getUserById(uid).addOnCompleteListener(task -> {
                         if (task.isSuccessful() && task.getResult() != null) {
-                            // משתמש קיים - כניסה רגילה
+                            // משתמש קיים -> כניסה רגילה
                             isLoading.setValue(false);
                             navigateToMain.setValue(true);
                         } else {
-                            // משתמש חדש - צריך לבחור סוג
+                            // משתמש חדש -> מעבירים ל-UI להשלמת פרטים
                             isLoading.setValue(false);
-                            showGoogleTypeDialog.setValue(uid);
+                            googleUserIncomplete.setValue(account);
                         }
                     });
                 })
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    errorMessage.setValue("Google Sign-In Failed");
+                    errorMessage.setValue("Google Sign-In Failed: " + e.getMessage());
                 });
     }
 
-    public void completeGoogleRegistration(String uid, String userType) {
+    // --- ✅ השלמת הרשמה מגוגל (כעת מקבלת את כל הכתובות) ---
+    public void completeGoogleRegistration(String uid, String userType, String phone,
+                                           String address, Double lat, Double lng,
+                                           String destAddress, Double destLat, Double destLng) {
         isLoading.setValue(true);
-        UserProfile user = new UserProfile();
-        user.setUserId(uid);
-        user.setName(auth.getCurrentUser().getDisplayName());
-        user.setUserType(userType);
-        // בהרשמה דרך גוגל אין לנו כרגע כתובת, המשתמש ישלים בפרופיל
+
+        // השם נלקח מהחשבון הנוכחי של גוגל
+        String name = (auth.getCurrentUser() != null) ? auth.getCurrentUser().getDisplayName() : "User";
+
+        // שימוש באותה פונקציית עזר ליצירת הפרופיל
+        UserProfile user = createProfileObject(uid, name, phone, userType,
+                address, lat, lng, destAddress, destLat, destLng);
 
         userRepository.saveMyProfile(user)
                 .addOnSuccessListener(unused -> {
@@ -149,7 +132,53 @@ public class AuthViewModel extends ViewModel {
                 })
                 .addOnFailureListener(e -> {
                     isLoading.setValue(false);
-                    errorMessage.setValue("שמירת נתונים נכשלה");
+                    errorMessage.setValue("שמירת נתונים נכשלה: " + e.getMessage());
                 });
+    }
+
+    // --- פונקציית עזר למניעת שכפול קוד ביצירת הפרופיל ---
+    private UserProfile createProfileObject(String uid, String name, String phone, String userType,
+                                            String address, Double lat, Double lng,
+                                            String destAddress, Double destLat, Double destLng) {
+        UserProfile user = new UserProfile();
+        user.setUserId(uid);
+        user.setName(name);
+        user.setPhone(phone);
+        user.setUserType(userType);
+
+        if ("customer".equals(userType)) {
+            // --- הגדרות לקוח ---
+
+            // מוצא
+            user.setDefaultFromAddress(address);
+            user.setFromLat(lat);
+            user.setFromLng(lng);
+
+            // יעד (חשוב!)
+            user.setDefaultToAddress(destAddress);
+            user.setToLat(destLat);
+            user.setToLng(destLng);
+
+        } else {
+            // --- הגדרות מוביל ---
+            user.setLat(lat != null ? lat : 0);
+            user.setLng(lng != null ? lng : 0);
+
+            // יצירת GeoHash לחיפוש מבוסס מיקום
+            if (lat != null && lng != null) {
+                String hash = GeoFireUtils.getGeoHashForLocation(new GeoLocation(lat, lng));
+                user.setGeohash(hash);
+            }
+
+            // הוספת הכתובת לרשימת אזורי השירות
+            List<String> areas = new ArrayList<>();
+            if (address != null) areas.add(address);
+            user.setServiceAreas(areas);
+
+            // רדיוס ברירת מחדל
+            user.setServiceRadiusKm(30);
+        }
+
+        return user;
     }
 }

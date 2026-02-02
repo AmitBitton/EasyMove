@@ -57,6 +57,11 @@ public class AuthActivity extends AppCompatActivity {
     private SignInButton btnGoogleSignIn;
 
     private boolean isLoginMode = true;
+
+    // ✅ משתנים חדשים לניהול השלמת פרטים מגוגל
+    private boolean isGoogleCompletionMode = false;
+    private String pendingGoogleUid = null;
+
     private GoogleSignInClient mGoogleSignInClient;
 
     // --- משתנים לשמירת הכתובות שנבחרו ---
@@ -111,7 +116,7 @@ public class AuthActivity extends AppCompatActivity {
                             // לקוח - מוצא
                             selectedSourceLat = place.getLatLng().latitude;
                             selectedSourceLng = place.getLatLng().longitude;
-                            selectedSourceAddress = place.getAddress(); // או place.getName()
+                            selectedSourceAddress = place.getAddress();
                             tvSource.setText(selectedSourceAddress);
                             tvSource.setTextColor(getColor(android.R.color.black));
 
@@ -181,6 +186,7 @@ public class AuthActivity extends AppCompatActivity {
 
     private void setupListeners() {
         switchModeText.setOnClickListener(v -> {
+            if (isGoogleCompletionMode) return; // אי אפשר להחליף מצב באמצע השלמה
             isLoginMode = !isLoginMode;
             updateMode();
         });
@@ -240,74 +246,131 @@ public class AuthActivity extends AppCompatActivity {
             buttonAction.setEnabled(!isLoading);
             btnGoogleSignIn.setEnabled(!isLoading);
             if (isLoading) buttonAction.setText("טוען...");
-            else updateMode();
+            else updateMode(); // מחזיר את הטקסט הנכון לכפתור
         });
 
-        viewModel.getShowGoogleTypeDialog().observe(this, this::showCompleteProfileDialog);
+        // ✅ מאזין חדש: משתמש גוגל שצריך להשלים פרטים
+        viewModel.getGoogleUserIncomplete().observe(this, account -> {
+            if (account != null) {
+                isGoogleCompletionMode = true;
+                isLoginMode = false; // טכנית זה הרשמה
+
+                // שמירת ה-UID הנוכחי (אנחנו כבר מחוברים ב-Auth)
+                if (viewModel.getAuthInstance().getCurrentUser() != null) {
+                    pendingGoogleUid = viewModel.getAuthInstance().getCurrentUser().getUid();
+                }
+
+                // מילוי אוטומטי של שם מגוגל
+                if (account.getDisplayName() != null) {
+                    editName.setText(account.getDisplayName());
+                }
+
+                Toast.makeText(this, "התחברת בהצלחה! אנא השלם את פרטי הכתובת.", Toast.LENGTH_LONG).show();
+                updateMode();
+            }
+        });
     }
 
     private void handleButtonClick() {
+        // --- מצב 1: התחברות רגילה (לא גוגל) ---
+        if (isLoginMode && !isGoogleCompletionMode) {
+            String email = editEmail.getText().toString().trim();
+            String password = editPassword.getText().toString().trim();
+
+            if (TextUtils.isEmpty(email)) { editEmail.setError("נא להזין אימייל"); return; }
+            if (TextUtils.isEmpty(password)) { editPassword.setError("נא להזין סיסמה"); return; }
+            viewModel.login(email, password);
+            return;
+        }
+
+        // --- מצב 2: הרשמה רגילה או השלמת פרטים מגוגל ---
+
+        String name = editName.getText().toString().trim();
+        String phone = editPhone.getText().toString().trim();
+
+        // בדיקות אימייל/סיסמה רק אם זה לא גוגל
         String email = editEmail.getText().toString().trim();
         String password = editPassword.getText().toString().trim();
 
-        // --- מצב התחברות (Login) ---
-        if (isLoginMode) {
-            if (TextUtils.isEmpty(email)) {
-                editEmail.setError("נא להזין אימייל");
+        if (!isGoogleCompletionMode) {
+            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
+                Toast.makeText(this, "נא למלא אימייל וסיסמה", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (TextUtils.isEmpty(password)) {
-                editPassword.setError("נא להזין סיסמה");
-                return;
-            }
-            viewModel.login(email, password);
         }
 
-        // --- מצב הרשמה (Register) ---
-        else {
-            String name = editName.getText().toString().trim();
-            String phone = editPhone.getText().toString().trim();
+        if (TextUtils.isEmpty(name)) {
+            editName.setError("חובה למלא שם");
+            return;
+        }
 
-            if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password) || TextUtils.isEmpty(name)) {
-                Toast.makeText(this, "נא למלא את כל שדות החובה", Toast.LENGTH_SHORT).show();
+        boolean isCustomer = radioCustomer.isChecked();
+
+        // ✅ אכיפת כתובות (משותף לשני המצבים)
+        if (isCustomer) {
+            if (selectedSourceAddress == null || selectedDestAddress == null) {
+                Toast.makeText(this, "חובה לבחור כתובת מוצא ויעד להרשמה", Toast.LENGTH_LONG).show();
                 return;
             }
-
-            boolean isCustomer = radioCustomer.isChecked();
-
-            // ✅ ולידציה ללקוח (שני הכתובות חובה!)
-            if (isCustomer) {
-                if (selectedSourceAddress == null || selectedDestAddress == null) {
-                    Toast.makeText(this, "חובה לבחור כתובת מוצא ויעד להרשמה", Toast.LENGTH_LONG).show();
-                    return;
-                }
+        } else {
+            if (moverLat == null || moverLng == null) {
+                Toast.makeText(this, "מוביל חייב לבחור כתובת בסיס מהרשימה", Toast.LENGTH_LONG).show();
+                return;
             }
-            // ✅ ולידציה למוביל (כתובת בסיס חובה!)
-            else {
-                if (moverLat == null || moverLng == null) {
-                    Toast.makeText(this, "מוביל חייב לבחור כתובת בסיס מהרשימה", Toast.LENGTH_LONG).show();
-                    return;
-                }
-            }
+        }
 
-            // הכנת נתונים להעברה
-            // שים לב: אנחנו מעבירים את הנתונים הרלוונטיים לפי סוג המשתמש
-            String addressToSend = isCustomer ? selectedSourceAddress : editMoverAddress.getText().toString();
-            Double latToSend = isCustomer ? selectedSourceLat : moverLat;
-            Double lngToSend = isCustomer ? selectedSourceLng : moverLng;
+        // הכנת נתונים לשליחה
+        String addressToSend = isCustomer ? selectedSourceAddress : editMoverAddress.getText().toString();
+        Double latToSend = isCustomer ? selectedSourceLat : moverLat;
+        Double lngToSend = isCustomer ? selectedSourceLng : moverLng;
 
-            // אזהרה: עליך לעדכן את AuthViewModel כך שיקבל גם את נתוני ה-Destination של הלקוח!
-            // כרגע אני מעביר את זה לפונקציה הקיימת, אבל מומלץ להוסיף ל-ViewModel גם destAddress, destLat, destLng
-            // כדי שזה יישמר במקום הנכון (defaultToAddress).
-
+        if (isGoogleCompletionMode) {
+            // ✅ קריאה לפונקציה החדשה להשלמת הרשמה
+            viewModel.completeGoogleRegistration(
+                    pendingGoogleUid,
+                    isCustomer ? "customer" : "mover",
+                    phone,
+                    addressToSend, latToSend, lngToSend,
+                    selectedDestAddress, selectedDestLat, selectedDestLng
+            );
+        } else {
+            // ✅ קריאה לפונקציה המעודכנת להרשמה רגילה
             viewModel.register(email, password, name, phone, isCustomer,
                     addressToSend, latToSend, lngToSend,
-                    // נתונים נוספים של הלקוח (יש לעדכן את הפונקציה ב-ViewModel לקבל אותם)
                     selectedDestAddress, selectedDestLat, selectedDestLng);
         }
     }
 
     private void updateMode() {
+        // --- מצב השלמת פרטים (Google Completion) ---
+        if (isGoogleCompletionMode) {
+            titleText.setText("השלמת פרטים");
+            buttonAction.setText("סיום הרשמה");
+
+            // הסתרת שדות לא רלוונטיים
+            editEmail.setVisibility(View.GONE);
+            editPassword.setVisibility(View.GONE);
+            btnGoogleSignIn.setVisibility(View.GONE);
+            switchModeText.setVisibility(View.GONE);
+
+            // הצגת שדות חובה
+            editName.setVisibility(View.VISIBLE);
+            editPhone.setVisibility(View.VISIBLE);
+            textUserTypeLabel.setVisibility(View.VISIBLE);
+            radioUserType.setVisibility(View.VISIBLE);
+
+            // הצגת כתובות לפי סוג משתמש
+            if (radioCustomer.isChecked()) {
+                layoutCustomerAddresses.setVisibility(View.VISIBLE);
+                layoutMoverRegistration.setVisibility(View.GONE);
+            } else {
+                layoutCustomerAddresses.setVisibility(View.GONE);
+                layoutMoverRegistration.setVisibility(View.VISIBLE);
+            }
+            return;
+        }
+
+        // --- מצבים רגילים (התחברות / הרשמה רגילה) ---
         if (isLoginMode) {
             titleText.setText("התחברות");
             editName.setVisibility(View.GONE);
@@ -318,6 +381,10 @@ public class AuthActivity extends AppCompatActivity {
             layoutCustomerAddresses.setVisibility(View.GONE);
             buttonAction.setText("התחבר");
             switchModeText.setText("אין לך חשבון? להרשמה לחצי כאן");
+            editEmail.setVisibility(View.VISIBLE);
+            editPassword.setVisibility(View.VISIBLE);
+            btnGoogleSignIn.setVisibility(View.VISIBLE);
+            switchModeText.setVisibility(View.VISIBLE);
         } else {
             titleText.setText("הרשמה");
             editName.setVisibility(View.VISIBLE);
@@ -325,7 +392,6 @@ public class AuthActivity extends AppCompatActivity {
             textUserTypeLabel.setVisibility(View.VISIBLE);
             radioUserType.setVisibility(View.VISIBLE);
 
-            // הצגת השדות הנכונים לפי הבחירה הנוכחית ברדיו
             if (radioCustomer.isChecked()) {
                 layoutCustomerAddresses.setVisibility(View.VISIBLE);
                 layoutMoverRegistration.setVisibility(View.GONE);
@@ -336,17 +402,10 @@ public class AuthActivity extends AppCompatActivity {
 
             buttonAction.setText("הרשמה");
             switchModeText.setText("יש לך כבר חשבון? התחברות");
+            editEmail.setVisibility(View.VISIBLE);
+            editPassword.setVisibility(View.VISIBLE);
+            btnGoogleSignIn.setVisibility(View.VISIBLE);
+            switchModeText.setVisibility(View.VISIBLE);
         }
-    }
-
-    // ... (פונקציית הדיאלוג נשארת ללא שינוי)
-    private void showCompleteProfileDialog(String uid) {
-        new AlertDialog.Builder(this)
-                .setTitle("השלמת הרשמה")
-                .setMessage("ברוכים הבאים! אנא בחר סוג משתמש להמשך.")
-                .setCancelable(false)
-                .setPositiveButton("אני לקוח", (dialog, which) -> viewModel.completeGoogleRegistration(uid, "customer"))
-                .setNegativeButton("אני מוביל", (dialog, which) -> viewModel.completeGoogleRegistration(uid, "mover"))
-                .show();
     }
 }

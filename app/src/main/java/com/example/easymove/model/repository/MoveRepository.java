@@ -1,7 +1,7 @@
 package com.example.easymove.model.repository;
 
 import com.example.easymove.model.MoveRequest;
-import com.example.easymove.model.UserProfile; // לוודא שיש import
+import com.example.easymove.model.UserProfile;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.FirebaseAuth;
@@ -166,18 +166,28 @@ public class MoveRepository {
         return performCancel(moveId, chatId, customerId);
     }
 
+    // ✅✅✅ התיקון בוצע כאן: הסרתי את המחיקה של פרטי המשתמש ✅✅✅
     private Task<Void> performCancel(String moveId, String chatId, String customerId) {
         WriteBatch batch = db.batch();
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
+
+        // 1. עדכון סטטוס ההובלה
         batch.update(moveRef, "status", "CANCELED", "confirmed", false);
+
+        // 2. איפוס הצ'אט
         if (chatId != null && !chatId.isEmpty()) {
             DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
-            batch.update(chatRef, "moverConfirmed", false, "customerConfirmed", false, "moverConfirmedAt", null, "customerConfirmedAt", null);
+            batch.update(chatRef,
+                    "moverConfirmed", false,
+                    "customerConfirmed", false,
+                    "moverConfirmedAt", null,
+                    "customerConfirmedAt", null
+            );
         }
-        if (customerId != null) {
-            DocumentReference userRef = db.collection("users").document(customerId);
-            batch.update(userRef, "defaultFromAddress", null, "defaultToAddress", null, "defaultMoveDate", 0, "fromLat", null, "fromLng", null, "toLat", null, "toLng", null);
-        }
+
+        // נמחק: הקוד שמאפס את הכתובות ב-User Profile
+        // if (customerId != null) { ... } -> הוסר כדי לשמור על הכתובות באיזור האישי
+
         return batch.commit();
     }
 
@@ -211,6 +221,8 @@ public class MoveRepository {
             return db.runTransaction(transaction -> {
                 transaction.update(chatRef, "customerConfirmed", true, "customerConfirmedAt", System.currentTimeMillis());
                 transaction.update(moveRef, "status", "CONFIRMED", "confirmed", true, "moverId", moverId, "chatId", chatId);
+
+                // כאן אנחנו *כן* מעדכנים את הפרופיל בעת אישור, וזה בסדר גמור
                 transaction.update(userRef, "defaultFromAddress", activeMove.getSourceAddress(), "defaultToAddress", activeMove.getDestAddress(), "defaultMoveDate", activeMove.getMoveDate(), "fromLat", activeMove.getSourceLat(), "fromLng", activeMove.getSourceLng(), "toLat", activeMove.getDestLat(), "toLng", activeMove.getDestLng());
                 return null;
             });
@@ -285,8 +297,7 @@ public class MoveRepository {
                 "cancelApprovedBy", moverId
         );
 
-        // Now perform the existing cancellation flow (status=CANCELED + reset chat + reset user defaults)
-        // IMPORTANT: we keep your existing logic as-is
+        // Now perform the existing cancellation flow (status=CANCELED + reset chat)
         return batch.commit().continueWithTask(t -> performCancel(moveId, chatId, customerId));
     }
 

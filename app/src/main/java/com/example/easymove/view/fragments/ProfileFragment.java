@@ -9,7 +9,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -20,7 +19,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -33,12 +31,12 @@ import com.firebase.geofire.GeoFireUtils;
 import com.firebase.geofire.GeoLocation;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.model.AddressComponent;
-import com.google.android.libraries.places.api.model.AddressComponents;
 import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.api.model.TypeFilter;
 import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
 import com.google.android.material.slider.Slider;
+import com.google.android.material.textfield.TextInputEditText;
 
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
@@ -52,42 +50,32 @@ public class ProfileFragment extends Fragment {
     private UserViewModel viewModel;
     private UserProfile currentUserProfile;
 
-
-    private NestedScrollView profileScroll;
-    private TextView labelFromAddress, labelToAddress;
+    // רכיבי UI ראשיים
     private ImageView imageProfile;
     private Button buttonChangeImage;
-    private EditText editName, editPhone;
+    private TextInputEditText editName, editPhone;
     private TextView textUserType;
 
-    // כתובות לקוח
-    private TextView tvFromAddress, tvToAddress;
-    private Button btnPickFromAddress, btnPickToAddress;
+    // קונטיינרים (מחזיקים את כל השדות לכל סוג משתמש)
+    private LinearLayout containerCustomerInfo;
+    private LinearLayout containerMoverInfo;
 
-    // תאריך הובלה (לקוח)
-    private TextView labelMoveDate, tvMoveDate;
-    private Button btnPickMoveDate;
+    // --- שדות לקוח ---
+    private TextView tvFromAddress, tvToAddress, tvMoveDate;
+    private Button btnPickFromAddress, btnPickToAddress, btnPickMoveDate;
+    private TextInputEditText editFloor, editApartment;
 
-    // קומה + דירה
-    private TextView labelFloor, labelApartment;
-    private EditText editFloor, editApartment;
-
-    // "אודות" (מוביל)
-    private TextView labelAbout;
-    private EditText editAbout;
-
-    // עריכה/שמירה
-    private Button buttonEdit, buttonSave, buttonCancel;
-    private LinearLayout layoutSaveCancel;
-
-    private TextView textError;
-    private ProgressBar progressBar;
-
-    // מוביל
-    private LinearLayout layoutMoverFields;
-    private TextView tvSelectedMoverAddress, labelMoverBaseAddress, tvMoverBaseAddress, tvRadiusLabel;
+    // --- שדות מוביל ---
+    private TextView tvMoverBaseAddress, tvRadiusLabel;
     private Button btnPickMoverLocation;
     private Slider sliderRadius;
+    private TextInputEditText editAbout;
+
+    // --- כפתורים כלליים ---
+    private Button buttonEdit, buttonSave, buttonCancel;
+    private LinearLayout layoutSaveCancel;
+    private TextView textError;
+    private ProgressBar progressBar;
 
     private Uri selectedImageUri = null;
     private ActivityResultLauncher<String> pickImageLauncher;
@@ -97,29 +85,28 @@ public class ProfileFragment extends Fragment {
 
     private boolean isEditMode = false;
 
-    // משתנים לשמירת מצב קודם (ביטול)
+    // גיבוי לביטול עריכה
     private String oldName, oldPhone, oldAbout, oldFromAddress, oldToAddress;
     private String oldFloorStr, oldApartmentStr;
     private long oldMoveDate = 0;
 
-    // התאריך שנבחר כרגע ב-UI
-    private long selectedMoveDate = 0;
-
-    // מוביל - ביטול
+    // גיבוי למוביל
     private String oldMoverBaseAddress, oldGeohash;
     private double oldLat, oldLng;
     private int oldRadius;
+
+    private long selectedMoveDate = 0;
 
     private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                     Place place = Autocomplete.getPlaceFromIntent(result.getData());
-                    if (place == null) return;
-
-                    if (currentPickType == AddressPickType.MOVER) updateMoverLocation(place);
-                    else if (currentPickType == AddressPickType.FROM) updateCustomerFromAddress(place);
-                    else if (currentPickType == AddressPickType.TO) updateCustomerToAddress(place);
+                    if (place != null) {
+                        if (currentPickType == AddressPickType.MOVER) updateMoverLocation(place);
+                        else if (currentPickType == AddressPickType.FROM) updateCustomerFromAddress(place);
+                        else if (currentPickType == AddressPickType.TO) updateCustomerToAddress(place);
+                    }
                 }
             }
     );
@@ -149,49 +136,41 @@ public class ProfileFragment extends Fragment {
     }
 
     private void initViews(View view) {
-        profileScroll = view.findViewById(R.id.profile_scroll);
+        // ראש ופרטים אישיים
         imageProfile = view.findViewById(R.id.image_profile);
         buttonChangeImage = view.findViewById(R.id.button_change_image);
         editName = view.findViewById(R.id.edit_name);
         editPhone = view.findViewById(R.id.edit_phone);
         textUserType = view.findViewById(R.id.text_user_type);
 
-        tvFromAddress = view.findViewById(R.id.tv_from_address);
-        tvToAddress = view.findViewById(R.id.tv_to_address);
-        btnPickFromAddress = view.findViewById(R.id.btnPickFromAddress);
-        btnPickToAddress = view.findViewById(R.id.btnPickToAddress);
+        // קונטיינרים
+        containerCustomerInfo = view.findViewById(R.id.container_customer_info);
+        containerMoverInfo = view.findViewById(R.id.container_mover_info);
 
-        labelMoveDate = view.findViewById(R.id.label_move_date);
+        // לקוח
+        tvFromAddress = view.findViewById(R.id.tv_from_address);
+        btnPickFromAddress = view.findViewById(R.id.btnPickFromAddress);
+        tvToAddress = view.findViewById(R.id.tv_to_address);
+        btnPickToAddress = view.findViewById(R.id.btnPickToAddress);
         tvMoveDate = view.findViewById(R.id.tv_move_date);
         btnPickMoveDate = view.findViewById(R.id.btnPickMoveDate);
-
-        labelFloor = view.findViewById(R.id.label_floor);
-        labelApartment = view.findViewById(R.id.label_apartment);
         editFloor = view.findViewById(R.id.edit_floor);
         editApartment = view.findViewById(R.id.edit_apartment);
 
-        labelAbout = view.findViewById(R.id.label_about);
+        // מוביל
+        tvMoverBaseAddress = view.findViewById(R.id.tvMoverBaseAddress);
+        btnPickMoverLocation = view.findViewById(R.id.btnPickMoverLocation);
+        tvRadiusLabel = view.findViewById(R.id.tvRadiusLabel);
+        sliderRadius = view.findViewById(R.id.sliderRadius);
         editAbout = view.findViewById(R.id.edit_about);
 
+        // כללי
         buttonEdit = view.findViewById(R.id.button_edit_profile);
         layoutSaveCancel = view.findViewById(R.id.layout_save_cancel);
         buttonSave = view.findViewById(R.id.button_save_profile);
         buttonCancel = view.findViewById(R.id.button_cancel_edit);
-
         textError = view.findViewById(R.id.text_error);
         progressBar = view.findViewById(R.id.progress_loading);
-
-        labelFromAddress = view.findViewById(R.id.label_from_address);
-        labelToAddress = view.findViewById(R.id.label_to_address);
-
-        layoutMoverFields = view.findViewById(R.id.layoutMoverFields);
-        tvSelectedMoverAddress = view.findViewById(R.id.tvSelectedMoverAddress);
-        btnPickMoverLocation = view.findViewById(R.id.btnPickMoverLocation);
-        tvRadiusLabel = view.findViewById(R.id.tvRadiusLabel);
-        sliderRadius = view.findViewById(R.id.sliderRadius);
-
-        labelMoverBaseAddress = view.findViewById(R.id.label_mover_base_address);
-        tvMoverBaseAddress = view.findViewById(R.id.tvMoverBaseAddress);
     }
 
     private void setupListeners() {
@@ -200,8 +179,13 @@ public class ProfileFragment extends Fragment {
                 uri -> {
                     if (uri != null) {
                         selectedImageUri = uri;
-                        imageProfile.setImageURI(uri);
-                        viewModel.uploadProfileImage(uri);
+                        // ✅ תיקון: שימוש ב-Glide גם כאן כדי לחתוך לעיגול מיד בבחירה
+                        Glide.with(this)
+                                .load(uri)
+                                .circleCrop()
+                                .into(imageProfile);
+
+                        viewModel.uploadProfileImage(uri); // העלאה מיידית
                     }
                 }
         );
@@ -216,27 +200,28 @@ public class ProfileFragment extends Fragment {
 
         buttonCancel.setOnClickListener(v -> cancelEditMode());
 
+        // כפתורי לקוח
         btnPickFromAddress.setOnClickListener(v -> {
             currentPickType = AddressPickType.FROM;
             openPlacePicker();
         });
-
         btnPickToAddress.setOnClickListener(v -> {
             currentPickType = AddressPickType.TO;
             openPlacePicker();
         });
+        btnPickMoveDate.setOnClickListener(v -> openDatePicker());
 
+        // כפתורי מוביל
         btnPickMoverLocation.setOnClickListener(v -> {
             currentPickType = AddressPickType.MOVER;
             openPlacePicker();
         });
 
-        btnPickMoveDate.setOnClickListener(v -> openDatePicker());
-
         sliderRadius.addOnChangeListener((slider, value, fromUser) -> {
-            if (!fromUser) return;
-            currentUserProfile.setServiceRadiusKm((int) value);
-            tvRadiusLabel.setText("רדיוס שירות: " + (int) value + " ק״מ");
+            if (fromUser && currentUserProfile != null) {
+                currentUserProfile.setServiceRadiusKm((int) value);
+                tvRadiusLabel.setText("רדיוס שירות: " + (int) value + " ק״מ");
+            }
         });
     }
 
@@ -244,16 +229,7 @@ public class ProfileFragment extends Fragment {
         viewModel.getMyProfileLiveData().observe(getViewLifecycleOwner(), profile -> {
             if (profile != null) {
                 currentUserProfile = profile;
-                isEditMode = false;
                 fillUiFromProfile(profile);
-                exitEditMode();
-            }
-        });
-
-        // האזנה להצלחה של שמירת פרטי ההובלה (הסינכרון)
-        viewModel.getMoveDetailsSaved().observe(getViewLifecycleOwner(), saved -> {
-            if (saved != null && saved) {
-                // אופציונלי: אפשר להציג טוסט מיוחד כאן אם רוצים
             }
         });
 
@@ -279,20 +255,25 @@ public class ProfileFragment extends Fragment {
     }
 
     private void fillUiFromProfile(@NonNull UserProfile profile) {
-        if (profile.getName() != null) editName.setText(profile.getName());
-        if (profile.getPhone() != null) editPhone.setText(profile.getPhone());
+        editName.setText(profile.getName());
+        editPhone.setText(profile.getPhone());
 
         String type = profile.getUserType();
         if (type == null) type = "customer";
         textUserType.setText(type);
 
         if (profile.getProfileImageUrl() != null && !profile.getProfileImageUrl().isEmpty()) {
-            Glide.with(this).load(profile.getProfileImageUrl())
-                    .placeholder(R.drawable.placeholder_image).into(imageProfile);
+            // ✅ תיקון: הוספת circleCrop() כדי לחתוך את התמונה לעיגול
+            Glide.with(this)
+                    .load(profile.getProfileImageUrl())
+                    .circleCrop()
+                    .placeholder(R.drawable.ic_profile_placeholder)
+                    .into(imageProfile);
         } else {
-            imageProfile.setImageResource(R.drawable.placeholder_image);
+            imageProfile.setImageResource(R.drawable.ic_profile_placeholder);
         }
 
+        // בחירת הקונטיינר הנכון להצגה
         if ("mover".equals(type)) {
             setupMoverUi(profile);
         } else {
@@ -301,74 +282,45 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupMoverUi(UserProfile profile) {
-        labelAbout.setVisibility(View.VISIBLE);
-        editAbout.setVisibility(View.VISIBLE);
+        containerCustomerInfo.setVisibility(View.GONE);
+        containerMoverInfo.setVisibility(View.VISIBLE);
+
         if (profile.getAbout() != null) editAbout.setText(profile.getAbout());
 
-        // הסתרת שדות לקוח
-        labelFromAddress.setVisibility(View.GONE); tvFromAddress.setVisibility(View.GONE); btnPickFromAddress.setVisibility(View.GONE);
-        labelToAddress.setVisibility(View.GONE); tvToAddress.setVisibility(View.GONE); btnPickToAddress.setVisibility(View.GONE);
-        labelMoveDate.setVisibility(View.GONE); tvMoveDate.setVisibility(View.GONE); btnPickMoveDate.setVisibility(View.GONE);
-        labelFloor.setVisibility(View.GONE); editFloor.setVisibility(View.GONE);
-        labelApartment.setVisibility(View.GONE); editApartment.setVisibility(View.GONE);
-
-        String baseAddress = (profile.getDefaultFromAddress() != null) ? profile.getDefaultFromAddress() : "טרם הוגדר בסיס יציאה";
-
-        labelMoverBaseAddress.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
-        tvMoverBaseAddress.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
+        // שליפת כתובת בסיס מהרשימה
+        String baseAddress = "טרם הוגדר בסיס יציאה";
+        List<String> areas = profile.getServiceAreas();
+        if (areas != null && !areas.isEmpty()) {
+            baseAddress = areas.get(0);
+        }
         tvMoverBaseAddress.setText(baseAddress);
-
-        layoutMoverFields.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-        tvSelectedMoverAddress.setText(baseAddress);
 
         int radius = profile.getServiceRadiusKm() > 0 ? profile.getServiceRadiusKm() : 30;
         sliderRadius.setValue(radius);
         tvRadiusLabel.setText("רדיוס שירות: " + radius + " ק״מ");
-
-        btnPickMoverLocation.setEnabled(isEditMode);
-        sliderRadius.setEnabled(isEditMode);
     }
 
     private void setupCustomerUi(UserProfile profile) {
-        layoutMoverFields.setVisibility(View.GONE);
-        labelMoverBaseAddress.setVisibility(View.GONE);
-        tvMoverBaseAddress.setVisibility(View.GONE);
-        labelAbout.setVisibility(View.GONE);
-        editAbout.setVisibility(View.GONE);
-
-        // כתובות
-        labelFromAddress.setVisibility(View.VISIBLE); tvFromAddress.setVisibility(View.VISIBLE);
-        labelToAddress.setVisibility(View.VISIBLE); tvToAddress.setVisibility(View.VISIBLE);
+        containerMoverInfo.setVisibility(View.GONE);
+        containerCustomerInfo.setVisibility(View.VISIBLE);
 
         tvFromAddress.setText(profile.getDefaultFromAddress() != null ? profile.getDefaultFromAddress() : "לא נבחרה כתובת");
         tvToAddress.setText(profile.getDefaultToAddress() != null ? profile.getDefaultToAddress() : "לא נבחרה כתובת");
 
-        // תאריך הובלה
-        labelMoveDate.setVisibility(View.VISIBLE); tvMoveDate.setVisibility(View.VISIBLE);
-
-        // טעינת התאריך מהפרופיל למשתנה המקומי
         if (profile.getDefaultMoveDate() != null && profile.getDefaultMoveDate() > 0) {
             selectedMoveDate = profile.getDefaultMoveDate();
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            tvMoveDate.setText(sdf.format(new Date(selectedMoveDate)));
         } else {
             selectedMoveDate = 0;
+            tvMoveDate.setText("טרם נקבע תאריך");
         }
-        updateMoveDateText();
-
-        btnPickFromAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-        btnPickToAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-        btnPickMoveDate.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-
-        labelFloor.setVisibility(View.VISIBLE); editFloor.setVisibility(View.VISIBLE);
-        labelApartment.setVisibility(View.VISIBLE); editApartment.setVisibility(View.VISIBLE);
-
-        editFloor.setEnabled(isEditMode);
-        editApartment.setEnabled(isEditMode);
 
         editFloor.setText(profile.getFloor() != null ? String.valueOf(profile.getFloor()) : "");
         editApartment.setText(profile.getApartment() != null ? String.valueOf(profile.getApartment()) : "");
     }
 
-    // --- לוגיקת בחירת מקומות ותאריך ---
+    // --- Places & Date Picker ---
 
     private void openPlacePicker() {
         List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.LAT_LNG, Place.Field.ADDRESS, Place.Field.ADDRESS_COMPONENTS);
@@ -411,10 +363,21 @@ public class ProfileFragment extends Fragment {
 
     private void updateMoverLocation(Place place) {
         if (place.getLatLng() == null || currentUserProfile == null || place.getAddress() == null) return;
-        tvSelectedMoverAddress.setText(place.getAddress());
+
+        tvMoverBaseAddress.setText(place.getAddress()); // עדכון ויזואלי מיידי
+
         currentUserProfile.setLat(place.getLatLng().latitude);
         currentUserProfile.setLng(place.getLatLng().longitude);
         currentUserProfile.setGeohash(GeoFireUtils.getGeoHashForLocation(new GeoLocation(place.getLatLng().latitude, place.getLatLng().longitude)));
+
+        // עדכון רשימת אזורי השירות (האיבר הראשון)
+        List<String> areas = currentUserProfile.getServiceAreas();
+        if (areas == null) areas = new java.util.ArrayList<>();
+        if (!areas.isEmpty()) areas.set(0, place.getAddress());
+        else areas.add(place.getAddress());
+        currentUserProfile.setServiceAreas(areas);
+
+        // גיבוי גם לכתובת מוצא רגילה (ליתר ביטחון)
         currentUserProfile.setDefaultFromAddress(place.getAddress());
     }
 
@@ -425,27 +388,25 @@ public class ProfileFragment extends Fragment {
         DatePickerDialog dialog = new DatePickerDialog(requireContext(), (view, year, month, dayOfMonth) -> {
             c.set(year, month, dayOfMonth, 0, 0, 0);
             selectedMoveDate = c.getTimeInMillis();
-            updateMoveDateText();
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            tvMoveDate.setText(sdf.format(c.getTime()));
         }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
 
         dialog.getDatePicker().setMinDate(System.currentTimeMillis());
         dialog.show();
     }
 
-    private void updateMoveDateText() {
-        if (selectedMoveDate > 0) {
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-            tvMoveDate.setText(sdf.format(new Date(selectedMoveDate)));
-        } else {
-            tvMoveDate.setText("טרם נקבע תאריך");
-        }
-    }
-
     private Integer parseOptionalInt(String s) {
         try { return Integer.parseInt(s.trim()); } catch (Exception e) { return null; }
     }
 
-    // --- שמירה וביטול ---
+    // --- Edit Mode Logic ---
+
+    private void enterEditMode() {
+        isEditMode = true;
+        backupCurrentData();
+        updateUiMode();
+    }
 
     private void saveProfileFromUi() {
         if (currentUserProfile == null) currentUserProfile = new UserProfile();
@@ -453,44 +414,22 @@ public class ProfileFragment extends Fragment {
         currentUserProfile.setName(editName.getText().toString().trim());
         currentUserProfile.setPhone(editPhone.getText().toString().trim());
 
-        String type = currentUserProfile.getUserType() != null ? currentUserProfile.getUserType() : "customer";
-
-        if ("mover".equals(type)) {
+        if ("mover".equals(currentUserProfile.getUserType())) {
             currentUserProfile.setAbout(editAbout.getText().toString().trim());
         } else {
             currentUserProfile.setFloor(parseOptionalInt(editFloor.getText().toString()));
             currentUserProfile.setApartment(parseOptionalInt(editApartment.getText().toString()));
-
-            // ✅ סנכרון: שמירת התאריך בפרופיל כדי שה-ViewModel יוכל לקחת אותו ולעדכן את ההובלה
             currentUserProfile.setDefaultMoveDate(selectedMoveDate);
         }
 
-        // ✅ קריאה ל-ViewModel שדואג גם לשמירת הפרופיל וגם לעדכון ההובלה הפעילה!
         viewModel.saveMyProfile(currentUserProfile);
-
         Toast.makeText(getContext(), "הפרופיל נשמר", Toast.LENGTH_SHORT).show();
     }
 
-    private void enterEditMode() {
-        isEditMode = true;
-        // שמירת ערכים ישנים לביטול
-        oldName = editName.getText().toString();
-        oldPhone = editPhone.getText().toString();
-        oldAbout = editAbout.getText().toString();
-        oldFromAddress = tvFromAddress.getText().toString();
-        oldToAddress = tvToAddress.getText().toString();
-        oldFloorStr = editFloor.getText().toString();
-        oldApartmentStr = editApartment.getText().toString();
-        oldMoveDate = selectedMoveDate;
-
-        if (currentUserProfile != null && "mover".equals(currentUserProfile.getUserType())) {
-            oldMoverBaseAddress = currentUserProfile.getDefaultFromAddress();
-            oldLat = currentUserProfile.getLat();
-            oldLng = currentUserProfile.getLng();
-            oldGeohash = currentUserProfile.getGeohash();
-            oldRadius = currentUserProfile.getServiceRadiusKm();
-        }
-
+    private void cancelEditMode() {
+        isEditMode = false;
+        restoreData();
+        fillUiFromProfile(currentUserProfile); // רענון ה-UI מהאובייקט המשוחזר
         updateUiMode();
     }
 
@@ -499,77 +438,78 @@ public class ProfileFragment extends Fragment {
         updateUiMode();
     }
 
-    private void cancelEditMode() {
-        isEditMode = false;
-        // שחזור ערכים
+    private void updateUiMode() {
+        // שדות טקסט
+        editName.setEnabled(isEditMode);
+        editPhone.setEnabled(isEditMode);
+        editFloor.setEnabled(isEditMode);
+        editApartment.setEnabled(isEditMode);
+        editAbout.setEnabled(isEditMode);
+
+        // כפתורים
+        buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
+        layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+        buttonChangeImage.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+
+        // כפתורי בחירה (לקוח)
+        btnPickFromAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+        btnPickToAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+        btnPickMoveDate.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+
+        // כפתורי בחירה (מוביל)
+        btnPickMoverLocation.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+        sliderRadius.setEnabled(isEditMode);
+    }
+
+    private void backupCurrentData() {
+        oldName = editName.getText().toString();
+        oldPhone = editPhone.getText().toString();
+
+        if (currentUserProfile != null) {
+            if ("mover".equals(currentUserProfile.getUserType())) {
+                oldAbout = editAbout.getText().toString();
+                oldRadius = currentUserProfile.getServiceRadiusKm();
+                // גיבוי מיקום
+                List<String> areas = currentUserProfile.getServiceAreas();
+                oldMoverBaseAddress = (areas != null && !areas.isEmpty()) ? areas.get(0) : "";
+                oldLat = currentUserProfile.getLat();
+                oldLng = currentUserProfile.getLng();
+                oldGeohash = currentUserProfile.getGeohash();
+            } else {
+                oldFloorStr = editFloor.getText().toString();
+                oldApartmentStr = editApartment.getText().toString();
+                oldFromAddress = currentUserProfile.getDefaultFromAddress();
+                oldToAddress = currentUserProfile.getDefaultToAddress();
+                oldMoveDate = selectedMoveDate;
+            }
+        }
+    }
+
+    private void restoreData() {
+        if (currentUserProfile == null) return;
+
         editName.setText(oldName);
         editPhone.setText(oldPhone);
 
-        if (currentUserProfile != null) {
-            String type = currentUserProfile.getUserType();
-            if ("mover".equals(type)) {
-                editAbout.setText(oldAbout);
-                currentUserProfile.setDefaultFromAddress(oldMoverBaseAddress);
-                currentUserProfile.setLat(oldLat); currentUserProfile.setLng(oldLng);
-                currentUserProfile.setGeohash(oldGeohash);
-                currentUserProfile.setServiceRadiusKm(oldRadius);
-            } else {
-                tvFromAddress.setText(oldFromAddress);
-                tvToAddress.setText(oldToAddress);
-                editFloor.setText(oldFloorStr);
-                editApartment.setText(oldApartmentStr);
+        if ("mover".equals(currentUserProfile.getUserType())) {
+            editAbout.setText(oldAbout);
+            currentUserProfile.setServiceRadiusKm(oldRadius);
 
-                selectedMoveDate = oldMoveDate;
+            // שחזור מיקום מוביל
+            currentUserProfile.setLat(oldLat);
+            currentUserProfile.setLng(oldLng);
+            currentUserProfile.setGeohash(oldGeohash);
+            List<String> areas = new java.util.ArrayList<>();
+            if (oldMoverBaseAddress != null && !oldMoverBaseAddress.isEmpty()) areas.add(oldMoverBaseAddress);
+            currentUserProfile.setServiceAreas(areas);
 
-                // חשוב: משחזרים גם לאובייקט הפרופיל כדי שלא יישמר מידע שגוי אם ילחצו שוב
-                currentUserProfile.setDefaultFromAddress(oldFromAddress);
-                currentUserProfile.setDefaultToAddress(oldToAddress);
-                currentUserProfile.setDefaultMoveDate(oldMoveDate);
-            }
+        } else {
+            selectedMoveDate = oldMoveDate;
+            currentUserProfile.setFloor(parseOptionalInt(oldFloorStr));
+            currentUserProfile.setApartment(parseOptionalInt(oldApartmentStr));
+            currentUserProfile.setDefaultFromAddress(oldFromAddress);
+            currentUserProfile.setDefaultToAddress(oldToAddress);
+            currentUserProfile.setDefaultMoveDate(oldMoveDate);
         }
-
-        fillUiFromProfile(currentUserProfile);
-        updateUiMode();
     }
-
-//    private void updateUiMode() {
-//        // רענון נראות כפתורים ושדות
-//        editName.setEnabled(isEditMode);
-//        editPhone.setEnabled(isEditMode);
-//
-//        buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
-//        layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-//
-//        if (currentUserProfile != null) {
-//            fillUiFromProfile(currentUserProfile);
-//        }
-//    }
-private void updateUiMode() {
-    // שדות בסיס
-    editName.setEnabled(isEditMode);
-    editPhone.setEnabled(isEditMode);
-
-    // כפתורים
-    buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
-    layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-
-    // ✅ מוביל: לאפשר עריכת "אודות"
-    if (currentUserProfile != null && "mover".equals(currentUserProfile.getUserType())) {
-        editAbout.setEnabled(isEditMode);
-        editAbout.setFocusable(isEditMode);
-        editAbout.setFocusableInTouchMode(isEditMode);
-    }
-
-    // ✅ לקוח: קומה/דירה
-    if (currentUserProfile != null && !"mover".equals(currentUserProfile.getUserType())) {
-        editFloor.setEnabled(isEditMode);
-        editApartment.setEnabled(isEditMode);
-    }
-
-    // רענון UI לפי סוג משתמש
-    if (currentUserProfile != null) {
-        fillUiFromProfile(currentUserProfile);
-    }
-}
-
 }
