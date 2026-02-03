@@ -33,11 +33,9 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
     public interface OnActionListener {
         void onApprove(MatchRequest req);
         void onReject(MatchRequest req);
-        // New: mover approves cancellation request
         void onApproveCancel(MoveRequest move);
     }
 
-    // ✅ עדכון שם הפונקציה הסטטית והטיפוס המוחזר
     public static MoveDetailsBottomSheetFragment newInstance(MoveRequest move, MatchRequest pendingRequest) {
         MoveDetailsBottomSheetFragment fragment = new MoveDetailsBottomSheetFragment();
         fragment.move = move;
@@ -52,7 +50,6 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        // משתמשים באותו קובץ XML שיצרנו קודם
         return inflater.inflate(R.layout.bottom_sheet_move_details, container, false);
     }
 
@@ -60,7 +57,7 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // --- חיבור ל-UI (הצגת נתונים כלליים) ---
+        // --- חיבור ל-UI (הצגת נתונים כלליים של ההובלה) ---
         TextView tvCustomer = view.findViewById(R.id.bsCustomerName);
         TextView tvSource = view.findViewById(R.id.bsSource);
         TextView tvDest = view.findViewById(R.id.bsDest);
@@ -74,7 +71,7 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
                 tvDate.setText(sdf.format(new Date(move.getMoveDate())));
             }
 
-            // שליפת שם הלקוח הראשי
+            // שליפת שם הלקוח הראשי (זה שיצר את ההובלה)
             if (move.getCustomerId() != null) {
                 new UserRepository().getUserNameById(move.getCustomerId())
                         .addOnSuccessListener(tvCustomer::setText);
@@ -100,29 +97,38 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
         Button btnApprove = view.findViewById(R.id.bsBtnApprove);
         Button btnReject = view.findViewById(R.id.bsBtnReject);
 
-        // אם הועברה בקשה (כלומר לחצו על כפתור שיש בו נקודה אדומה)
+        // אם יש בקשה ממתינה לאישור
         if (pendingRequest != null) {
             cardPending.setVisibility(View.VISIBLE);
-            String info = "שם: " + pendingRequest.getFromUserName() + "\n" +
+
+            // ✅ התיקון הגדול: מציגים את toUserName (השותף) ולא את fromUserName
+            String partnerName = pendingRequest.getToUserName();
+            if (partnerName == null || partnerName.isEmpty()) {
+                partnerName = "שותף (שם לא זמין)";
+            }
+
+            String info = "בקשת הצטרפות להובלה!\n" +
+                    "שם השותף: " + partnerName + "\n" +
                     "כתובת איסוף: " + pendingRequest.getPartnerAddress();
+
             tvPendingInfo.setText(info);
 
             // לחיצה על אישור
             btnApprove.setOnClickListener(v -> {
                 if (listener != null) listener.onApprove(pendingRequest);
-                dismiss(); // סגירת החלון
+                dismiss();
             });
 
             // לחיצה על דחייה
             btnReject.setOnClickListener(v -> {
                 if (listener != null) listener.onReject(pendingRequest);
-                dismiss(); // סגירת החלון
+                dismiss();
             });
         } else {
             cardPending.setVisibility(View.GONE);
         }
 
-        // ✅ חדש: כפתור “אשר ביטול” מוצג רק אם יש cancelRequestPending=true
+        // --- כפתור “אשר ביטול” (רלוונטי רק אם הלקוח ביקש לבטל) ---
         Button btnApproveCancel = view.findViewById(R.id.bsBtnApproveCancel);
         boolean cancelPending = move != null
                 && move.getCancelRequestPending() != null

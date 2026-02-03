@@ -4,7 +4,6 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,6 +34,7 @@ public class MyMoveFragment extends Fragment {
     // UI elements
     private TextView textNoMove;
     private CardView cardMoveDetails;
+    private TextView textTitle; // הוספתי קישור לכותרת
     private TextView textFrom, textTo, textDate;
     private TextView tvPartnerInfo, tvIntermediateAddress;
 
@@ -75,11 +75,14 @@ public class MyMoveFragment extends Fragment {
     private void initViews(View view) {
         textNoMove = view.findViewById(R.id.textNoMove);
         cardMoveDetails = view.findViewById(R.id.cardMoveDetails);
+
+        // הוספתי את ה-ID הזה ב-XML למטה, חשוב!
+        textTitle = view.findViewById(R.id.textTitle);
+
         textFrom = view.findViewById(R.id.textFrom);
         textTo = view.findViewById(R.id.textTo);
         textDate = view.findViewById(R.id.textDate);
 
-        // ✅ חיבור לרכיבים החדשים
         tvPartnerInfo = view.findViewById(R.id.tvPartnerInfo);
         tvIntermediateAddress = view.findViewById(R.id.tvIntermediateAddress);
 
@@ -127,16 +130,9 @@ public class MyMoveFragment extends Fragment {
         textNoMove.setVisibility(View.GONE);
         cardMoveDetails.setVisibility(View.VISIBLE);
 
-        textFrom.setText(move.getSourceAddress() != null ? move.getSourceAddress() : "כתובת מוצא חסרה");
-        textTo.setText(move.getDestAddress() != null ? move.getDestAddress() : "כתובת יעד חסרה");
-
-        // ✅ טיפול בכתובת עצירה (שותף)
-        if (move.getIntermediateAddress() != null && !move.getIntermediateAddress().isEmpty()) {
-            tvIntermediateAddress.setVisibility(View.VISIBLE);
-            tvIntermediateAddress.setText("➕ איסוף נוסף מ: " + move.getIntermediateAddress());
-        } else {
-            tvIntermediateAddress.setVisibility(View.GONE);
-        }
+        // עדכון שדות טקסט
+        textFrom.setText(move.getSourceAddress() != null ? move.getSourceAddress() : "טרם הוגדר");
+        textTo.setText(move.getDestAddress() != null ? move.getDestAddress() : "טרם הוגדר");
 
         if (move.getMoveDate() > 0) {
             try {
@@ -149,10 +145,42 @@ public class MyMoveFragment extends Fragment {
             }
         } else {
             textDate.setText("טרם נקבע תאריך");
-            textDate.setTextColor(Color.RED);
+            textDate.setTextColor(Color.GRAY);
         }
 
-        // ✅ לוגיקה חכמה לזיהוי מי אני (הלקוח הראשי או השותף)
+        // ✅ בדיקה: האם זו הובלה אמיתית (יש ID) או טיוטה מהפרופיל (אין ID)
+        boolean isRealMove = (move.getId() != null);
+
+        if (!isRealMove) {
+            // --- מצב טיוטה (אין הובלה פעילה) ---
+            if (textTitle != null) textTitle.setText("המעבר המתוכנן שלי");
+
+            // מציגים רק את כפתור הרשומות
+            btnViewItems.setVisibility(View.VISIBLE);
+
+            // מסתירים את כל השאר
+            btnCancelMove.setVisibility(View.GONE);
+            btnAddPartner.setVisibility(View.GONE);
+            btnChatWithMover.setVisibility(View.GONE);
+            tvPartnerInfo.setVisibility(View.GONE);
+            tvIntermediateAddress.setVisibility(View.GONE);
+
+        } else {
+            // --- מצב הובלה פעילה (אמיתית) ---
+            if (textTitle != null) textTitle.setText("פרטי הובלה");
+
+            // מציגים כפתורים רלוונטיים
+            btnViewItems.setVisibility(View.VISIBLE);
+            btnCancelMove.setVisibility(View.VISIBLE); // הובלה פעילה אפשר לבטל
+
+            // לוגיקת שותפים וצ'אט המקורית שלך
+            handlePartnerAndChatUI(move);
+            checkIfMoveIsFinished(move);
+        }
+    }
+
+    // הפונקציה המקורית שלך לניהול תצוגת שותפים (נקראת רק כשיש הובלה אמיתית)
+    private void handlePartnerAndChatUI(MoveRequest move) {
         String myId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
 
         if (move.getPartnerId() != null && !move.getPartnerId().isEmpty()) {
@@ -160,34 +188,29 @@ public class MyMoveFragment extends Fragment {
             btnAddPartner.setVisibility(View.GONE);
             tvPartnerInfo.setVisibility(View.VISIBLE);
 
-            // אם אני היוצר של ההובלה -> מציגים את השם של השותף
-            // אם אני השותף -> מציגים את השם של היוצר
-            String otherId;
-            String label;
-
-            if (myId.equals(move.getCustomerId())) {
-                otherId = move.getPartnerId();
-                label = "שותף:";
+            if (move.getIntermediateAddress() != null && !move.getIntermediateAddress().isEmpty()) {
+                tvIntermediateAddress.setVisibility(View.VISIBLE);
+                tvIntermediateAddress.setText("➕ איסוף נוסף מ: " + move.getIntermediateAddress());
             } else {
-                otherId = move.getCustomerId();
-                label = "הובלה ראשית של:";
+                tvIntermediateAddress.setVisibility(View.GONE);
             }
 
-            // שליפת שם האדם השני
-            new com.example.easymove.model.repository.UserRepository().getUserNameById(otherId)
-                    .addOnSuccessListener(name -> {
-                        tvPartnerInfo.setText("✅ " + label + " " + name);
-                    });
-        } else {
-            // אין שותף עדיין
+            String otherId = myId.equals(move.getCustomerId()) ? move.getPartnerId() : move.getCustomerId();
+            String label = myId.equals(move.getCustomerId()) ? "שותף:" : "הובלה ראשית של:";
 
-            // כפתור הוספת שותף מוצג רק אם אני בעל ההובלה (ולא אם אני סתם צופה)
+            new com.example.easymove.model.repository.UserRepository().getUserNameById(otherId)
+                    .addOnSuccessListener(name -> tvPartnerInfo.setText("✅ " + label + " " + name));
+        } else {
+            // אין שותף
+            tvPartnerInfo.setVisibility(View.GONE);
+            tvIntermediateAddress.setVisibility(View.GONE);
+
+            // כפתור הוספה רק לבעלים
             if (myId.equals(move.getCustomerId())) {
                 btnAddPartner.setVisibility(View.VISIBLE);
             } else {
                 btnAddPartner.setVisibility(View.GONE);
             }
-            tvPartnerInfo.setVisibility(View.GONE);
         }
 
         if ("CONFIRMED".equals(move.getStatus()) && move.getChatId() != null && !move.getChatId().isEmpty()) {
@@ -195,8 +218,6 @@ public class MyMoveFragment extends Fragment {
         } else {
             btnChatWithMover.setVisibility(View.GONE);
         }
-
-        checkIfMoveIsFinished(move);
     }
 
     private void setupButtons() {
@@ -210,7 +231,6 @@ public class MyMoveFragment extends Fragment {
         });
 
         btnCancelMove.setOnClickListener(v -> onCancelClicked());
-
 
         btnViewItems.setOnClickListener(v -> {
             getParentFragmentManager()
@@ -253,7 +273,7 @@ public class MyMoveFragment extends Fragment {
 
     private void onCancelClicked() {
         MoveRequest move = viewModel.getCurrentMove().getValue();
-        if (move == null) return;
+        if (move == null || move.getId() == null) return; // הגנה
 
         String myId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
         if (myId == null) return;
@@ -289,5 +309,4 @@ public class MyMoveFragment extends Fragment {
                 .setNegativeButton("לא", null)
                 .show();
     }
-
 }

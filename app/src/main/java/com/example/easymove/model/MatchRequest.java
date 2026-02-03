@@ -3,13 +3,16 @@ package com.example.easymove.model;
 public class MatchRequest {
     private String requestId;
     private String fromUserId;
-    private String fromUserName;
+    private String fromUserName; // שם הלקוח הראשי (יוצר הבקשה)
+
     private String toUserId;
+    private String toUserName;   // ✅ חדש: שם השותף המצטרף
+
     private String moveId;
     private String status;         // "pending", "waiting_for_mover", "approved", "rejected"
     private String partnerAddress; // הכתובת של המקבל (מתמלא באישור)
 
-    // ✅ שדות חדשים: פרטי ההובלה של השולח (כדי שהמקבל ידע למה הוא מסכים)
+    // פרטי ההובלה של השולח (כדי שהמקבל ידע למה הוא מסכים)
     private String originalSourceAddress;
     private String originalDestAddress;
 
@@ -17,11 +20,13 @@ public class MatchRequest {
 
     public MatchRequest() {}
 
-    public MatchRequest(String fromUserId, String fromUserName, String toUserId, String moveId,
-                        String source, String dest) {
+    // ✅ הבנאי עודכן לקבל גם את toUserName
+    public MatchRequest(String fromUserId, String fromUserName, String toUserId, String toUserName,
+                        String moveId, String source, String dest) {
         this.fromUserId = fromUserId;
         this.fromUserName = fromUserName;
         this.toUserId = toUserId;
+        this.toUserName = toUserName; // ✅ שמירה
         this.moveId = moveId;
         this.originalSourceAddress = source;
         this.originalDestAddress = dest;
@@ -41,6 +46,10 @@ public class MatchRequest {
 
     public String getToUserId() { return toUserId; }
     public void setToUserId(String toUserId) { this.toUserId = toUserId; }
+
+    // ✅ Getter & Setter לשדה החדש
+    public String getToUserName() { return toUserName; }
+    public void setToUserName(String toUserName) { this.toUserName = toUserName; }
 
     public String getMoveId() { return moveId; }
     public void setMoveId(String moveId) { this.moveId = moveId; }

@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel;
 import com.example.easymove.model.MatchRequest;
 import com.example.easymove.model.MoveRequest;
 import com.example.easymove.model.repository.MoveRepository;
+import com.example.easymove.model.repository.UserRepository; // הוספנו
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -18,6 +19,8 @@ import java.util.Arrays;
 public class MyMoveViewModel extends ViewModel {
 
     private final MoveRepository repository = new MoveRepository();
+    private final UserRepository userRepository = new UserRepository(); // הוספנו לטעינת פרופיל
+
     private final MutableLiveData<MoveRequest> currentMove = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
     private final MutableLiveData<String> errorMsg = new MutableLiveData<>();
@@ -49,6 +52,7 @@ public class MyMoveViewModel extends ViewModel {
                 .addSnapshotListener((value, error) -> {
                     if (error != null) {
                         Log.e("DEBUG_MOVE", "שגיאה בחיפוש כבעלים: " + error.getMessage());
+                        // במקרה שגיאה ננסה לבדוק אם שותף, ואם לא - טיוטה
                         checkIfImPartner(uid);
                         return;
                     }
@@ -68,36 +72,53 @@ public class MyMoveViewModel extends ViewModel {
 
         Log.d("DEBUG_MOVE", "מחפש הובלה שבה partnerId הוא: " + uid);
 
-        // שיניתי מעט את השאילתה כדי שתהיה קלה יותר (ללא whereIn בהתחלה לבדיקה)
-        // אם זה עובד עכשיו, סימן שהבעיה הייתה באינדקס של ה-whereIn
         moveListener = FirebaseFirestore.getInstance().collection("moves")
                 .whereEqualTo("partnerId", uid)
                 .addSnapshotListener((value, error) -> {
-                    isLoading.setValue(false);
+                    isLoading.setValue(false); // סיימנו לטעון בכל מקרה
 
                     if (error != null) {
-                        Log.e("DEBUG_MOVE", "🔥 שגיאה קריטית בחיפוש שותף: " + error.getMessage());
-                        errorMsg.setValue("שגיאת פיירבייס (בדוק לוגים): " + error.getMessage());
+                        Log.e("DEBUG_MOVE", "🔥 שגיאה בחיפוש שותף: " + error.getMessage());
+                        // במקרה שגיאה - נטען טיוטה מהפרופיל
+                        loadDraftFromProfile();
                         return;
                     }
 
                     if (value != null && !value.isEmpty()) {
-                        // סינון ידני לסטטוס (כדי למנוע צורך באינדקס מורכב כרגע)
+                        // לולאה כדי למצוא את ההובלה הפעילה (למקרה שיש היסטוריה)
                         for (DocumentSnapshot doc : value.getDocuments()) {
                             String status = doc.getString("status");
                             if ("OPEN".equals(status) || "CONFIRMED".equals(status)) {
                                 Log.d("DEBUG_MOVE", "🎉 בול! נמצאה הובלה כשותף! ID: " + doc.getId());
                                 updateMoveData(doc);
-                                return;
+                                return; // יצאנו כי מצאנו הובלה אמיתית
                             }
                         }
-                        Log.d("DEBUG_MOVE", "נמצאו מסמכים כשותף, אבל הסטטוס לא מתאים.");
-                        currentMove.setValue(null);
-                    } else {
-                        Log.d("DEBUG_MOVE", "לא נמצא שום מסמך שבו אני שותף.");
-                        currentMove.setValue(null);
                     }
+
+                    // אם הגענו לפה - אין הובלה פעילה (לא כבעלים ולא כשותף)
+                    Log.d("DEBUG_MOVE", "אין הובלה פעילה. טוען טיוטה מהפרופיל...");
+                    loadDraftFromProfile();
                 });
+    }
+
+    // ✅ פונקציה חדשה: טוענת את הכתובות מהפרופיל ומציגה אותן כ"טיוטה"
+    private void loadDraftFromProfile() {
+        userRepository.getMyProfile().addOnSuccessListener(profile -> {
+            if (profile != null) {
+                MoveRequest draftMove = new MoveRequest();
+                draftMove.setId(null); // חשוב מאוד! זה הסימן שזו טיוטה ולא הובלה אמיתית
+                draftMove.setSourceAddress(profile.getDefaultFromAddress());
+                draftMove.setDestAddress(profile.getDefaultToAddress());
+                if (profile.getDefaultMoveDate() != null) {
+                    draftMove.setMoveDate(profile.getDefaultMoveDate());
+                }
+                // מציגים את הטיוטה
+                currentMove.setValue(draftMove);
+            } else {
+                currentMove.setValue(null); // באמת אין כלום
+            }
+        }).addOnFailureListener(e -> currentMove.setValue(null));
     }
 
     private void updateMoveData(DocumentSnapshot doc) {
@@ -109,7 +130,6 @@ public class MyMoveViewModel extends ViewModel {
         isLoading.setValue(false);
     }
 
-    // ... שאר הפונקציות (listenForMatchRequests, approveMatch וכו') ללא שינוי ...
     public void listenForMatchRequests(String uid) {
         if (requestListener != null) requestListener.remove();
         requestListener = FirebaseFirestore.getInstance().collection("match_requests")
@@ -127,12 +147,15 @@ public class MyMoveViewModel extends ViewModel {
 
     public void cancelCurrentMove() {
         MoveRequest move = currentMove.getValue();
-        if (move != null) repository.cancelMoveAndResetChat(move.getId(), move.getChatId(), move.getCustomerId());
+        // רק אם יש ID (הובלה אמיתית) מבטלים
+        if (move != null && move.getId() != null) {
+            repository.cancelMoveAndResetChat(move.getId(), move.getChatId(), move.getCustomerId());
+        }
     }
 
     public void markMoveAsCompleted() {
         MoveRequest move = currentMove.getValue();
-        if (move != null) repository.completeMove(move.getId());
+        if (move != null && move.getId() != null) repository.completeMove(move.getId());
     }
 
     @Override
@@ -144,7 +167,7 @@ public class MyMoveViewModel extends ViewModel {
 
     public void cancelMoveWithPolicy() {
         MoveRequest move = currentMove.getValue();
-        if (move == null) return;
+        if (move == null || move.getId() == null) return; // הגנה
 
         String myId = repository.getCurrentUserId();
         if (myId == null) return;
@@ -152,27 +175,21 @@ public class MyMoveViewModel extends ViewModel {
         boolean iAmPartner = myId.equals(move.getPartnerId());
         boolean iAmCustomer = myId.equals(move.getCustomerId());
 
-        // Partner cancellation: cancel partnership only (no mover approval)
         if (iAmPartner) {
             repository.cancelPartnerParticipation(move.getId());
             return;
         }
 
-        if (!iAmCustomer) return; // Only the main customer can request/cancel the whole move
+        if (!iAmCustomer) return;
 
         long now = System.currentTimeMillis();
         long weekMs = 7L * 24L * 60L * 60L * 1000L;
-
-        // If moveDate is unknown, treat as "can cancel immediately" (you can change this rule if you want)
         long moveDate = move.getMoveDate();
 
         if (moveDate == 0 || (moveDate - now) >= weekMs) {
-            // Cancel immediately using existing logic
             repository.cancelMoveAndResetChat(move.getId(), move.getChatId(), move.getCustomerId());
         } else {
-            // Less than a week -> request mover approval
             repository.requestCancelMoveByCustomer(move.getId(), move.getCustomerId());
         }
     }
-
 }

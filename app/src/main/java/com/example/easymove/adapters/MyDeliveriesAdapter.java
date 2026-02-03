@@ -49,6 +49,7 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
     @NonNull
     @Override
     public DeliveryViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        // שימוש בקובץ item_delivery_card הקיים והמתוקן
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_delivery_card, parent, false);
         return new DeliveryViewHolder(view);
     }
@@ -60,7 +61,6 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
         holder.tvSource.setText(move.getSourceAddress() != null ? move.getSourceAddress() : "");
         holder.tvDest.setText(move.getDestAddress() != null ? move.getDestAddress() : "");
 
-        // Show intermediate pickup address (partner stop) if exists
         if (move.getIntermediateAddress() != null && !move.getIntermediateAddress().isEmpty()) {
             holder.tvIntermediateAddress.setVisibility(View.VISIBLE);
             holder.tvIntermediateAddress.setText("➕ איסוף נוסף מ: " + move.getIntermediateAddress());
@@ -68,7 +68,6 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
             holder.tvIntermediateAddress.setVisibility(View.GONE);
         }
 
-        // Date/status label
         if (move.getMoveDate() > 0) {
             java.text.SimpleDateFormat sdf =
                     new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
@@ -80,7 +79,6 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
             holder.tvStatus.setTextColor(android.graphics.Color.GRAY);
         }
 
-        // Customer name
         holder.tvCustomerName.setText("טוען לקוח...");
         if (move.getCustomerId() != null) {
             userRepository.getUserNameById(move.getCustomerId())
@@ -92,19 +90,20 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
             holder.tvCustomerName.setText("לקוח: לא זמין");
         }
 
-        // Partner request badge (existing)
+        // ✅ לוגיקה מאוחדת: נקודה אחת לשני המקרים
         MatchRequest req = requestsMap.get(move.getId());
-        holder.viewNotificationBadge.setVisibility(req != null ? View.VISIBLE : View.GONE);
 
-        // Cancel request badge (new) - requires viewCancelBadge in XML
-        boolean cancelPending = move.getCancelRequestPending() != null && move.getCancelRequestPending();
-        if (holder.viewCancelBadge != null) {
-            holder.viewCancelBadge.setVisibility(cancelPending ? View.VISIBLE : View.GONE);
+        boolean hasPartnerRequest = (req != null);
+        boolean hasCancelRequest = (move.getCancelRequestPending() != null && move.getCancelRequestPending());
+
+        // אם יש בקשה לשותפות או בקשת ביטול -> הצג את הנקודה
+        if (hasPartnerRequest || hasCancelRequest) {
+            holder.viewNotificationBadge.setVisibility(View.VISIBLE);
+        } else {
+            holder.viewNotificationBadge.setVisibility(View.GONE);
         }
 
         holder.btnChat.setOnClickListener(v -> listener.onChatClick(move));
-
-        // Pass the pending partner request (could be null)
         holder.btnDetails.setOnClickListener(v -> listener.onDetailsClick(move, req));
     }
 
@@ -116,8 +115,7 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
     static class DeliveryViewHolder extends RecyclerView.ViewHolder {
         TextView tvCustomerName, tvSource, tvDest, tvStatus, tvIntermediateAddress;
         Button btnChat, btnDetails;
-        View viewNotificationBadge; // Partner request badge
-        View viewCancelBadge;       // Cancel request badge
+        View viewNotificationBadge; // הנקודה המאוחדת
 
         public DeliveryViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -128,16 +126,11 @@ public class MyDeliveriesAdapter extends RecyclerView.Adapter<MyDeliveriesAdapte
             tvStatus = itemView.findViewById(R.id.tvMoveStatus);
             tvIntermediateAddress = itemView.findViewById(R.id.tvIntermediateAddress);
 
-            // Keep your existing IDs (as in your current XML)
             btnChat = itemView.findViewById(R.id.btnOpenChat);
             btnDetails = itemView.findViewById(R.id.btnDetails);
 
-            // Existing badge for partner requests
+            // חיבור ל-ID היחיד שנשאר ב-XML
             viewNotificationBadge = itemView.findViewById(R.id.viewNotificationBadge);
-
-            // New badge for cancel requests (add this View to XML)
-            // If the view doesn't exist yet, this will just stay null safely.
-            viewCancelBadge = itemView.findViewById(R.id.viewCancelBadge);
         }
     }
 }

@@ -4,7 +4,7 @@
     <selectionStates>
       <SelectionState runConfigName="EasyMove">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-02-02T12:18:23.272934Z">
+        <DropdownSelection timestamp="2026-02-03T08:41:54.450771Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="PhysicalDevice" identifier="serial=38291FDJH00EG4" />

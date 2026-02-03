@@ -6,11 +6,11 @@ import androidx.lifecycle.ViewModel;
 
 import com.example.easymove.model.MatchRequest;
 import com.example.easymove.model.UserProfile;
-import com.example.easymove.model.repository.MoveRepository; // שינוי חשוב
+import com.example.easymove.model.repository.MoveRepository;
 import com.example.easymove.model.repository.UserRepository;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.ListenerRegistration; // הוספנו
-import com.google.firebase.firestore.FirebaseFirestore; // הוספנו
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +18,7 @@ import java.util.List;
 public class PartnerMatchViewModel extends ViewModel {
 
     private final UserRepository userRepository = new UserRepository();
-    private final MoveRepository moveRepository = new MoveRepository(); // הוספנו
+    private final MoveRepository moveRepository = new MoveRepository();
 
     private final MutableLiveData<List<UserProfile>> potentialPartners = new MutableLiveData<>();
     private final MutableLiveData<List<MatchRequest>> incomingRequests = new MutableLiveData<>();
@@ -35,7 +35,7 @@ public class PartnerMatchViewModel extends ViewModel {
 
     public void loadData() {
         loadPotentialPartners();
-        startListeningToRequests(); // החלפנו את loadIncomingRequests בהאזנה רציפה
+        startListeningToRequests();
     }
 
     private void loadPotentialPartners() {
@@ -74,20 +74,17 @@ public class PartnerMatchViewModel extends ViewModel {
         potentialPartners.setValue(filtered);
     }
 
-    // ✅ האזנה בזמן אמת לבקשות נכנסות (במקום load חד פעמי)
     public void startListeningToRequests() {
         String myUid = userRepository.getCurrentUserId();
         if (myUid == null) return;
 
         if (requestsListener != null) requestsListener.remove();
 
-        // מאזינים לבקשות שסטטוס שלהן הוא "pending" והן מיועדות אליי
         requestsListener = FirebaseFirestore.getInstance().collection("match_requests")
                 .whereEqualTo("toUserId", myUid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener((value, error) -> {
                     if (error != null) {
-                        // אפשר לטפל בשגיאה
                         return;
                     }
 
@@ -105,14 +102,13 @@ public class PartnerMatchViewModel extends ViewModel {
                 });
     }
 
+    // ✅ התיקון כאן: אנחנו מעבירים גם את שם השותף (toUser.getName())
     public void sendRequest(UserProfile toUser) {
-        // שימוש בפונקציה המעודכנת ב-UserRepository ששולחת גם את moveId
-        userRepository.sendMatchRequest(toUser.getUserId())
+        userRepository.sendMatchRequest(toUser.getUserId(), toUser.getName())
                 .addOnSuccessListener(v -> toastMessage.setValue("בקשה נשלחה ל-" + toUser.getName()))
                 .addOnFailureListener(e -> toastMessage.setValue("שגיאה: " + e.getMessage()));
     }
 
-    // ✅ אישור: משתמש בפונקציה החדשה ב-MoveRepository
     public void approveRequest(MatchRequest request) {
         String myUid = userRepository.getCurrentUserId();
         if (myUid == null) return;
@@ -120,17 +116,14 @@ public class PartnerMatchViewModel extends ViewModel {
         moveRepository.approveMatchByPartner(request.getRequestId(), myUid)
                 .addOnSuccessListener(v -> {
                     toastMessage.setValue("הבקשה אושרה! ממתין לאישור המוביל.");
-                    // הרשימה תתעדכן לבד בגלל ה-Listener
                 })
                 .addOnFailureListener(e -> toastMessage.setValue("שגיאה באישור"));
     }
 
-    // ✅ דחייה: מחיקת הבקשה
     public void rejectRequest(MatchRequest request) {
         moveRepository.rejectAndDeleteRequest(request.getRequestId())
                 .addOnSuccessListener(v -> {
                     toastMessage.setValue("הבקשה נדחתה ונמחקה");
-                    // הרשימה תתעדכן לבד
                 })
                 .addOnFailureListener(e -> toastMessage.setValue("שגיאה בדחייה"));
     }

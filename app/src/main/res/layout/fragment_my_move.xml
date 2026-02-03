@@ -10,7 +10,7 @@
         android:id="@+id/textNoMove"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="אין הובלה פעילה כרגע"
+        android:text="טוען נתונים..."
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -40,6 +40,7 @@
                 android:padding="24dp">
 
                 <TextView
+                    android:id="@+id/textTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="24dp"
@@ -161,6 +162,7 @@
         android:visibility="gone"
         app:cardBackgroundColor="#E3F2FD"
         app:cardCornerRadius="12dp"
+        app:cardElevation="20dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">

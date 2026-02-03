@@ -271,13 +271,7 @@ public class UserRepository {
         return getMoversByAreas(List.of(area));
     }
 
-    /* --- NEW METHOD: GeoSpatial Query Support --- */
-    /**
-     * Executes a single query for a GeoHash range.
-     * This is used by the ViewModel to construct the full radius search.
-     */
     public Task<QuerySnapshot> getMoversByGeoHash(String startHash, String endHash) {
-        // שים לב: זה דורש ליצור Index ב-Firebase Console על השדה 'geohash'
         return db.collection("users")
                 .whereEqualTo("userType", "mover")
                 .orderBy("geohash")
@@ -314,10 +308,6 @@ public class UserRepository {
                 );
     }
 
-
-
-
-
     // -----------------------------------------------------------
     //  פונקציות לשידוך שותפים (Matchmaking)
     // -----------------------------------------------------------
@@ -333,9 +323,9 @@ public class UserRepository {
 
     /**
      * שליחת בקשת חברות למשתמש אחר (מתוקן)
-     * שולף את ההובלה הפעילה, את השם שלי, ויוצר בקשה עם moveId.
+     * ✅ הוספנו את הפרמטר targetUserName כדי לשמור אותו בבקשה
      */
-    public Task<Void> sendMatchRequest(String targetUserId) {
+    public Task<Void> sendMatchRequest(String targetUserId, String targetUserName) {
         String myUid = uidOrThrow();
 
         // 1. שליפת ההובלה הפעילה כדי לקבל ID וכתובות
@@ -359,8 +349,16 @@ public class UserRepository {
                         UserProfile myProfile = profileTask.getResult();
                         String myName = (myProfile != null && myProfile.getName() != null) ? myProfile.getName() : "משתמש";
 
-                        // 3. יצירת הבקשה עם הכתובות
-                        MatchRequest request = new MatchRequest(myUid, myName, targetUserId, moveId, source, dest);
+                        // 3. יצירת הבקשה עם הכתובות ועם שני השמות
+                        MatchRequest request = new MatchRequest(
+                                myUid,
+                                myName,
+                                targetUserId,
+                                targetUserName, // ✅ הוספת השם החדש
+                                moveId,
+                                source,
+                                dest
+                        );
 
                         return db.collection("match_requests").add(request).continueWith(t -> null);
                     });
