@@ -137,4 +137,15 @@ public class ChatRepository {
         updates.put("customerConfirmedAt", System.currentTimeMillis());
         return db.collection(CHATS_COLLECTION).document(chatId).update(updates);
     }
+    /**
+     * מעדכן את שדה lastSeen עבור המשתמש הנוכחי לזמן העכשיו
+     */
+    public Task<Void> updateLastSeen(String chatId, String userId) {
+        // אנחנו מעדכנים מפתח בתוך מפה (Map) בשם lastSeen
+        // הפורמט ב-Firestore לעדכון שדה בתוך מפה הוא "mapName.key"
+        String fieldPath = "lastSeen." + userId;
+
+        return db.collection(CHATS_COLLECTION).document(chatId)
+                .update(fieldPath, new Timestamp(new Date()));
+    }
 }

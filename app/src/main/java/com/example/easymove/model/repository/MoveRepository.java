@@ -17,6 +17,8 @@ import com.google.firebase.firestore.WriteBatch;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class MoveRepository {
@@ -33,14 +35,9 @@ public class MoveRepository {
         return auth.getCurrentUser() != null ? auth.getCurrentUser().getUid() : null;
     }
 
-    // --- לוגיקה חדשה: שותפים והובלות ---
+    // --- שותפים והובלות ---
 
-    /**
-     * שלב 1 באישור: השותף מאשר.
-     * הפונקציה לוקחת את הכתובת מפרופיל השותף ושומרת בבקשה, ומעדכנת סטטוס ל"ממתין למוביל".
-     */
     public Task<Void> approveMatchByPartner(String requestId, String partnerUid) {
-        // קודם שולפים את הפרופיל של השותף כדי לקחת את הכתובת שלו
         return db.collection(COLLECTION_USERS).document(partnerUid).get()
                 .continueWithTask(task -> {
                     if (!task.isSuccessful() || task.getResult() == null) {
@@ -50,44 +47,32 @@ public class MoveRepository {
                     String address = (profile != null && profile.getDefaultFromAddress() != null)
                             ? profile.getDefaultFromAddress() : "כתובת לא מעודכנת";
 
-                    // מעדכנים את הבקשה: הוספת הכתובת ושינוי סטטוס
                     return db.collection(COLLECTION_MATCH_REQUESTS).document(requestId)
                             .update(
-                                    "status", "waiting_for_mover", // מעבירים את הכדור למוביל
+                                    "status", "waiting_for_mover",
                                     "partnerAddress", address
                             );
                 });
     }
 
-    /**
-     * שלב 2 באישור: המוביל מאשר.
-     * סוגר את הבקשה ומעדכן את ההובלה הראשית עם השותף והכתובת שלו.
-     */
     public Task<Void> finalizePartnerMatch(String requestId, String moveId, String partnerId, String partnerAddress) {
         WriteBatch batch = db.batch();
 
-        android.util.Log.d("DEBUG_REPO", "Finalizing match: MoveID=" + moveId + ", PartnerID=" + partnerId);
-
-        // 1. עדכון הבקשה ל-APPROVED (סופי)
         DocumentReference requestRef = db.collection(COLLECTION_MATCH_REQUESTS).document(requestId);
         batch.update(requestRef, "status", "approved");
 
-        // 2. עדכון ההובלה עצמה עם פרטי השותף
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
         batch.update(moveRef,
-                "partnerId", partnerId, // <--- זה חייב להיות ה-UID המדויק של המשתמש
+                "partnerId", partnerId,
                 "intermediateAddress", partnerAddress
         );
 
         return batch.commit();
     }
 
-
     public Task<Void> rejectAndDeleteRequest(String requestId) {
         return db.collection(COLLECTION_MATCH_REQUESTS).document(requestId).delete();
     }
-
-
 
     public ListenerRegistration listenToMoverConfirmedMoves(String moverId, EventListener<QuerySnapshot> listener) {
         return db.collection(COLLECTION_MOVES)
@@ -166,15 +151,12 @@ public class MoveRepository {
         return performCancel(moveId, chatId, customerId);
     }
 
-    // ✅✅✅ התיקון בוצע כאן: הסרתי את המחיקה של פרטי המשתמש ✅✅✅
     private Task<Void> performCancel(String moveId, String chatId, String customerId) {
         WriteBatch batch = db.batch();
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
 
-        // 1. עדכון סטטוס ההובלה
         batch.update(moveRef, "status", "CANCELED", "confirmed", false);
 
-        // 2. איפוס הצ'אט
         if (chatId != null && !chatId.isEmpty()) {
             DocumentReference chatRef = db.collection(COLLECTION_CHATS).document(chatId);
             batch.update(chatRef,
@@ -184,10 +166,6 @@ public class MoveRepository {
                     "customerConfirmedAt", null
             );
         }
-
-        // נמחק: הקוד שמאפס את הכתובות ב-User Profile
-        // if (customerId != null) { ... } -> הוסר כדי לשמור על הכתובות באיזור האישי
-
         return batch.commit();
     }
 
@@ -221,8 +199,6 @@ public class MoveRepository {
             return db.runTransaction(transaction -> {
                 transaction.update(chatRef, "customerConfirmed", true, "customerConfirmedAt", System.currentTimeMillis());
                 transaction.update(moveRef, "status", "CONFIRMED", "confirmed", true, "moverId", moverId, "chatId", chatId);
-
-                // כאן אנחנו *כן* מעדכנים את הפרופיל בעת אישור, וזה בסדר גמור
                 transaction.update(userRef, "defaultFromAddress", activeMove.getSourceAddress(), "defaultToAddress", activeMove.getDestAddress(), "defaultMoveDate", activeMove.getMoveDate(), "fromLat", activeMove.getSourceLat(), "fromLng", activeMove.getSourceLng(), "toLat", activeMove.getDestLat(), "toLng", activeMove.getDestLng());
                 return null;
             });
@@ -238,15 +214,63 @@ public class MoveRepository {
                 .continueWith(task -> !task.getResult().isEmpty());
     }
 
+    // ✅✅✅ התיקון הגדול להיסטוריית שותפים ✅✅✅
     public Task<List<MoveRequest>> getMoveHistory(String uid, String userType) {
-        String fieldName = "mover".equals(userType) ? "moverId" : "customerId";
         List<String> historyStatuses = Arrays.asList("COMPLETED", "CANCELED");
-        return db.collection(COLLECTION_MOVES)
-                .whereEqualTo(fieldName, uid)
+
+        // אם המשתמש הוא מוביל - מחפשים רגיל
+        if ("mover".equals(userType)) {
+            return db.collection(COLLECTION_MOVES)
+                    .whereEqualTo("moverId", uid)
+                    .whereIn("status", historyStatuses)
+                    .orderBy("moveDate", Query.Direction.DESCENDING)
+                    .get()
+                    .continueWith(this::mapQueryToMoves);
+        }
+
+        // אם המשתמש הוא לקוח - הוא יכול להיות גם "בעלים" וגם "שותף"
+        // מכיוון שאי אפשר לעשות OR ב-Firestore בין שדות שונים באותה שאילתה, נעשה שתי שאילתות ונאחד אותן
+
+        // 1. שאילתה כבעל ההובלה (customerId)
+        Task<List<MoveRequest>> taskAsCustomer = db.collection(COLLECTION_MOVES)
+                .whereEqualTo("customerId", uid)
                 .whereIn("status", historyStatuses)
                 .orderBy("moveDate", Query.Direction.DESCENDING)
                 .get()
                 .continueWith(this::mapQueryToMoves);
+
+        // 2. שאילתה כשותף (partnerId)
+        Task<List<MoveRequest>> taskAsPartner = db.collection(COLLECTION_MOVES)
+                .whereEqualTo("partnerId", uid)
+                .whereIn("status", historyStatuses)
+                .orderBy("moveDate", Query.Direction.DESCENDING)
+                .get()
+                .continueWith(this::mapQueryToMoves);
+
+        // 3. איחוד התוצאות
+        return Tasks.whenAllSuccess(taskAsCustomer, taskAsPartner).continueWith(task -> {
+            List<Object> results = task.getResult(); // מחזיר רשימה של התוצאות של כל טאסק
+            List<MoveRequest> combinedList = new ArrayList<>();
+
+            // מוסיפים תוצאות מהשאילתה הראשונה
+            if (results.size() > 0) {
+                combinedList.addAll((List<MoveRequest>) results.get(0));
+            }
+            // מוסיפים תוצאות מהשאילתה השנייה
+            if (results.size() > 1) {
+                combinedList.addAll((List<MoveRequest>) results.get(1));
+            }
+
+            // מיון ידני מחדש לפי תאריך (כי האיחוד משבש את הסדר)
+            Collections.sort(combinedList, new Comparator<MoveRequest>() {
+                @Override
+                public int compare(MoveRequest m1, MoveRequest m2) {
+                    return Long.compare(m2.getMoveDate(), m1.getMoveDate()); // סדר יורד (הכי חדש למעלה)
+                }
+            });
+
+            return combinedList;
+        });
     }
 
     public Task<List<MoveRequest>> getMoverConfirmedMoves(String moverId) {
@@ -276,8 +300,6 @@ public class MoveRepository {
 
     public Task<Void> requestCancelMoveByCustomer(String moveId, String customerId) {
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
-
-        // Mark cancellation as pending approval by mover
         return moveRef.update(
                 "cancelRequestPending", true,
                 "cancelRequestedAt", System.currentTimeMillis(),
@@ -287,24 +309,19 @@ public class MoveRepository {
 
     public Task<Void> approveCancelMoveByMover(String moveId, String chatId, String customerId, String moverId) {
         WriteBatch batch = db.batch();
-
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
 
-        // Mark approval metadata (optional but useful)
         batch.update(moveRef,
                 "cancelRequestPending", false,
                 "cancelApprovedAt", System.currentTimeMillis(),
                 "cancelApprovedBy", moverId
         );
 
-        // Now perform the existing cancellation flow (status=CANCELED + reset chat)
         return batch.commit().continueWithTask(t -> performCancel(moveId, chatId, customerId));
     }
 
     public Task<Void> cancelPartnerParticipation(String moveId) {
         DocumentReference moveRef = db.collection(COLLECTION_MOVES).document(moveId);
-
-        // Remove partner and intermediate stop, restoring the move to its original state
         return moveRef.update(
                 "partnerId", null,
                 "intermediateAddress", null,
@@ -312,5 +329,4 @@ public class MoveRepository {
                 "intermediateLng", null
         );
     }
-
 }

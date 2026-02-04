@@ -168,4 +168,11 @@ public class ChatViewModel extends ViewModel {
         if (messagesListener != null) messagesListener.remove();
         if (chatMetadataListener != null) chatMetadataListener.remove();
     }
+
+    public void markAsSeen(String chatId) {
+        String myUid = getCurrentUserId();
+        if (myUid != null) {
+            chatRepository.updateLastSeen(chatId, myUid);
+        }
+    }
 }

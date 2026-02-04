@@ -2,6 +2,7 @@ package com.example.easymove.view.fragments;
 
 import android.os.Bundle;
 import android.view.View;
+import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -41,26 +42,40 @@ public class MoverReviewsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // חיבור לרכיבים ב-XML
         TextView tvTitle = view.findViewById(R.id.tvReviewsTitle);
+        ImageButton btnBack = view.findViewById(R.id.btnBack); // ✅ הכפתור החדש
         ProgressBar progressBar = view.findViewById(R.id.progressBarReviews);
-
         TextView tvEmpty = view.findViewById(R.id.tvEmptyReviews);
         RecyclerView recyclerView = view.findViewById(R.id.recyclerReviews);
 
+        // ✅ לוגיקה לכפתור חזרה
+        btnBack.setOnClickListener(v -> {
+            if (getParentFragmentManager().getBackStackEntryCount() > 0) {
+                getParentFragmentManager().popBackStack(); // חוזר אחורה בהיסטוריה
+            } else {
+                requireActivity().onBackPressed(); // ברירת מחדל אם אין היסטוריה
+            }
+        });
+
+        // אתחול הרשימה
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         ReviewsAdapter adapter = new ReviewsAdapter();
         recyclerView.setAdapter(adapter);
 
+        // קבלת ארגומנטים
         Bundle args = getArguments();
         String moverId = args != null ? args.getString(ARG_MOVER_ID, "") : "";
         String moverName = args != null ? args.getString(ARG_MOVER_NAME, "") : "";
 
+        // עדכון כותרת
         if (moverName != null && !moverName.trim().isEmpty()) {
             tvTitle.setText("ביקורות על " + moverName);
         } else {
             tvTitle.setText("ביקורות");
         }
 
+        // טעינת הנתונים
         progressBar.setVisibility(View.VISIBLE);
         tvEmpty.setVisibility(View.GONE);
 
@@ -77,7 +92,6 @@ public class MoverReviewsFragment extends Fragment {
                             Review r = doc.toObject(Review.class);
                             if (r != null) reviews.add(r);
                         }
-
                     }
 
                     if (reviews.isEmpty()) {

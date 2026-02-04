@@ -223,4 +223,13 @@ public class ChatActivity extends AppCompatActivity {
         // ✅ קריאה ל-ViewModel לשליחת הודעה
         chatViewModel.sendMessage(chatId, text, currentUserId, currentUserName);
     }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // ✅ ברגע שנכנסים (או חוזרים) למסך, מסמנים שראינו
+        if (chatId != null) {
+            chatViewModel.markAsSeen(chatId);
+        }
+    }
 }

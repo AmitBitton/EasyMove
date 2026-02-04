@@ -172,18 +172,39 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
+
             <TextView
                 android:id="@+id/tvRequestDetails"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="בקשה חדשה"/>
+                android:text="בקשה חדשה"
+                android:textSize="16sp"
+                android:layout_marginBottom="12dp"
+                android:layout_gravity="end"/>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-                <Button android:id="@+id/btnRejectReq" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="דחה"/>
-                <Button android:id="@+id/btnApproveReq" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="אשר"/>
-            </LinearLayout>
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <Button
+                    android:id="@+id/btnRejectReq"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="דחה"
+                    android:backgroundTint="@color/blue_primary"
+                    android:textColor="@android:color/white"
+                    android:layout_marginEnd="8dp"/> <Button
+                android:id="@+id/btnApproveReq"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="אשר"
+                android:backgroundTint="@color/blue_primary"
+                android:textColor="@android:color/white"
+                android:layout_marginStart="8dp"/> </LinearLayout>
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
