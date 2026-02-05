@@ -33,7 +33,6 @@ public class SettingsFragment extends Fragment {
 
     private SettingsViewModel viewModel; // ✅ שימוש ב-ViewModel
     private SwitchMaterial switchNotifications;
-    private SwitchMaterial switchDarkMode;
     private SharedPreferences sharedPref;
 
     // לאנצ'ר לבקשת הרשאה (Android 13+)
@@ -64,12 +63,8 @@ public class SettingsFragment extends Fragment {
 
         // 2. חיבור ל-XML
         switchNotifications = view.findViewById(R.id.switchNotifications);
-        switchDarkMode = view.findViewById(R.id.switchDarkMode);
         View btnContact = view.findViewById(R.id.btnContactSupport);
         View btnPrivacy = view.findViewById(R.id.btnPrivacyPolicy);
-
-        // 3. טעינת מצב קיים
-        loadNightModeState();
 
         // בדיקת מצב התראות מה-ViewModel (הוא יבדוק מול ה-DB)
         viewModel.checkNotificationStatus();
@@ -94,13 +89,6 @@ public class SettingsFragment extends Fragment {
     }
 
     private void setupListeners(View btnContact, View btnPrivacy) {
-        // מצב לילה
-        switchDarkMode.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            int mode = isChecked ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
-            AppCompatDelegate.setDefaultNightMode(mode);
-            sharedPref.edit().putBoolean("isDarkMode", isChecked).apply();
-        });
-
         // התראות
         switchNotifications.setOnCheckedChangeListener(this::onNotificationSwitchChanged);
 
@@ -140,12 +128,6 @@ public class SettingsFragment extends Fragment {
         } else {
             viewModel.setNotificationsEnabled(true);
         }
-    }
-
-    private void loadNightModeState() {
-        if (switchDarkMode == null) return;
-        boolean isDark = sharedPref.getBoolean("isDarkMode", false);
-        switchDarkMode.setChecked(isDark);
     }
 
     private void setSwitchCheckedSilent(SwitchMaterial switchView, boolean isChecked) {
