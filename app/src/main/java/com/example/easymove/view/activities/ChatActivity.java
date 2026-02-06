@@ -19,21 +19,23 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.easymove.R;
 import com.example.easymove.adapters.ChatAdapter;
 import com.example.easymove.model.Chat;
-import com.example.easymove.model.Message;
 import com.example.easymove.model.repository.UserRepository;
 import com.example.easymove.viewmodel.ChatViewModel;
 
-import java.util.ArrayList;
-import java.util.List;
-
+/**
+ * Activity responsible for the individual Chat screen.
+ * Handles sending/receiving messages and the specific logic for confirming a move
+ * between a Customer and a Mover within the chat context.
+ */
 public class ChatActivity extends AppCompatActivity {
 
     private String chatId;
     private String currentUserId;
     private String currentUserName;
 
-    private ChatViewModel chatViewModel; // ✅ ViewModel במקום Repositories ישירים
+    private ChatViewModel chatViewModel; // ViewModel handles all business logic
 
+    // UI Components
     private ChatAdapter adapter;
     private EditText editInput;
     private RecyclerView recyclerView;
@@ -49,6 +51,7 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
+        // 1. Validate Intent Data
         chatId = getIntent().getStringExtra("CHAT_ID");
         if (chatId == null) {
             Toast.makeText(this, "שגיאה בטעינת הצ'אט", Toast.LENGTH_SHORT).show();
@@ -56,25 +59,25 @@ public class ChatActivity extends AppCompatActivity {
             return;
         }
 
-        // אתחול ה-ViewModel
+        // 2. Initialize ViewModel
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
         currentUserId = chatViewModel.getCurrentUserId();
 
         if (currentUserId == null) {
+            Toast.makeText(this, "משתמש לא מחובר", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        // טעינת שם המשתמש (לצורך שליחת הודעות)
-        new UserRepository().getUserNameById(currentUserId).addOnSuccessListener(name -> {
-            currentUserName = name;
-        });
+        // 3. Load User Name (needed for sending messages with proper sender name)
+        // Note: Ideally, this should also be moved to the ViewModel or UserSession.
+        new UserRepository().getUserNameById(currentUserId).addOnSuccessListener(name -> currentUserName = name);
 
         initViews();
         setupRecyclerView();
-        observeViewModel(); // ✅ האזנה לשינויים מה-ViewModel
+        observeViewModel();
 
-        // התחלת האזנה לצ'אט הספציפי הזה
+        // 4. Start listening for real-time updates for this specific chat
         chatViewModel.startListening(chatId);
     }
 
@@ -87,12 +90,13 @@ public class ChatActivity extends AppCompatActivity {
         toolbar.setNavigationOnClickListener(v -> finish());
 
         tvTitle = findViewById(R.id.tvChatTitle);
-        tvTitle.setText("צ'אט");
+        tvTitle.setText("צ'אט"); // Default title, will be updated by ViewModel
 
         editInput = findViewById(R.id.editMessageInput);
         ImageButton btnSend = findViewById(R.id.btnSendMessage);
         recyclerView = findViewById(R.id.recyclerChat);
 
+        // Confirmation UI (Bottom card)
         layoutConfirmMove = findViewById(R.id.layoutConfirmMove);
         tvConfirmStatus = findViewById(R.id.tvConfirmStatus);
         btnConfirmMove = findViewById(R.id.btnConfirmMove);
@@ -103,12 +107,16 @@ public class ChatActivity extends AppCompatActivity {
 
     private void setupRecyclerView() {
         adapter = new ChatAdapter(currentUserId);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        // StackFromEnd isn't strictly necessary with scrollToPosition, but helpful for chat UIs
+        LinearLayoutManager manager = new LinearLayoutManager(this);
+        // manager.setStackFromEnd(true); // Optional: Keeps list at bottom on open
+        recyclerView.setLayoutManager(manager);
         recyclerView.setAdapter(adapter);
     }
 
     private void observeViewModel() {
-        // 1. האזנה להודעות חדשות
+        // 1. Observe Messages List
         chatViewModel.getMessages().observe(this, messages -> {
             if (messages != null) {
                 adapter.setMessages(messages);
@@ -118,23 +126,24 @@ public class ChatActivity extends AppCompatActivity {
             }
         });
 
-        // 2. האזנה לשינויים בסטטוס הצ'אט (כותרת, אישורים)
+        // 2. Observe Chat Metadata (Title, Confirmation Status)
         chatViewModel.getChatMetadata().observe(this, chat -> {
             if (chat != null) {
                 currentChat = chat;
-                // עדכון הכותרת עם השם של הצד השני
+
+                // Update Toolbar Title with the OTHER person's name
                 chat.setCurrentUserId(currentUserId);
                 String title = chat.getChatTitle();
                 if (title != null && !title.trim().isEmpty()) {
                     tvTitle.setText(title);
                 }
 
-                // עדכון כרטיס התיאום
+                // Update the "Confirm Move" card UI based on roles and status
                 updateConfirmCardUi(chat);
             }
         });
 
-        // 3. האזנה להודעות טוסט (שגיאות או הצלחות)
+        // 3. Observe Toast Messages (Errors / Successes)
         chatViewModel.getToastMessage().observe(this, msg -> {
             if (msg != null && !msg.isEmpty()) {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
@@ -142,10 +151,15 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * Updates the UI for the "Confirm Move" card at the top of the chat.
+     * Logic depends on whether the user is a Mover or Customer, and the current confirmation state.
+     */
     private void updateConfirmCardUi(Chat chat) {
         boolean isMover = currentUserId.equals(chat.getMoverId());
         boolean isCustomer = currentUserId.equals(chat.getCustomerId());
 
+        // If user is neither (e.g., admin or error), hide layout
         if (!isMover && !isCustomer) {
             layoutConfirmMove.setVisibility(View.GONE);
             return;
@@ -154,31 +168,42 @@ public class ChatActivity extends AppCompatActivity {
         boolean moverConfirmed = chat.isMoverConfirmed();
         boolean customerConfirmed = chat.isCustomerConfirmed();
 
+        // --- Logic for MOVER ---
         if (isMover) {
             layoutConfirmMove.setVisibility(View.VISIBLE);
+
             if (!moverConfirmed) {
+                // Step 1: Mover hasn't confirmed yet
                 tvConfirmStatus.setText("לחץ כדי לאשר שתיאמתם הובלה");
                 btnConfirmMove.setText("תיאמתי עם הלקוח");
                 btnConfirmMove.setEnabled(true);
             } else if (!customerConfirmed) {
+                // Step 2: Mover confirmed, waiting for Customer
                 tvConfirmStatus.setText("אישרת ✅ ממתינים לאישור הלקוח...");
                 btnConfirmMove.setText("ממתין ללקוח");
                 btnConfirmMove.setEnabled(false);
             } else {
+                // Step 3: Both confirmed
                 tvConfirmStatus.setText("הובלה תואמה ונסגרה ✅");
                 btnConfirmMove.setText("סגור");
                 btnConfirmMove.setEnabled(false);
             }
-        } else if (isCustomer) {
+        }
+        // --- Logic for CUSTOMER ---
+        else {
             if (!moverConfirmed) {
+                // Step 1: Hide card until Mover initiates confirmation
                 layoutConfirmMove.setVisibility(View.GONE);
             } else {
                 layoutConfirmMove.setVisibility(View.VISIBLE);
+
                 if (!customerConfirmed) {
+                    // Step 2: Mover confirmed, Customer needs to accept
                     tvConfirmStatus.setText("המוביל אישר! אשר/י גם את/ה:");
                     btnConfirmMove.setText("אני מאשר/ת את ההובלה");
                     btnConfirmMove.setEnabled(true);
                 } else {
+                    // Step 3: Both confirmed
                     tvConfirmStatus.setText("ההובלה תואמה בהצלחה! 🎉");
                     btnConfirmMove.setText("תואם");
                     btnConfirmMove.setEnabled(false);
@@ -195,9 +220,9 @@ public class ChatActivity extends AppCompatActivity {
 
         if (isMover) {
             if (currentChat.isMoverConfirmed()) return;
-            btnConfirmMove.setEnabled(false);
+            btnConfirmMove.setEnabled(false); // Prevent double clicks
 
-            // ✅ קריאה ל-ViewModel
+            // Mover initiates confirmation
             chatViewModel.confirmByMover(chatId);
 
         } else if (isCustomer) {
@@ -209,7 +234,7 @@ public class ChatActivity extends AppCompatActivity {
 
             btnConfirmMove.setEnabled(false);
 
-            // ✅ קריאה ל-ViewModel שמבצע את כל הבדיקות והאישורים
+            // Customer finalizes confirmation
             chatViewModel.confirmByCustomer(chatId, currentChat.getMoverId(), currentUserId);
         }
     }
@@ -218,16 +243,16 @@ public class ChatActivity extends AppCompatActivity {
         String text = editInput.getText().toString().trim();
         if (TextUtils.isEmpty(text)) return;
 
-        editInput.setText("");
+        editInput.setText(""); // Clear input
 
-        // ✅ קריאה ל-ViewModel לשליחת הודעה
+        // Send message via ViewModel
         chatViewModel.sendMessage(chatId, text, currentUserId, currentUserName);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // ✅ ברגע שנכנסים (או חוזרים) למסך, מסמנים שראינו
+        // Update "Last Seen" timestamp whenever the user enters or returns to the chat
         if (chatId != null) {
             chatViewModel.markAsSeen(chatId);
         }

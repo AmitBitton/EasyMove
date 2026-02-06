@@ -5,6 +5,7 @@ import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -44,74 +45,90 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
+/**
+ * Fragment responsible for displaying and editing the User Profile.
+ * Supports both "Customer" and "Mover" user types with dynamic UI changes.
+ * <p>
+ * Features:
+ * 1. View/Edit Personal Info (Name, Phone, Image).
+ * 2. Customer: Manage Default Move Details (Source, Dest, Floor, Date).
+ * 3. Mover: Manage Service Area (Base Location, Radius) and "About".
+ * 4. Google Places Autocomplete for address selection.
+ * 5. Edit Mode with "Cancel/Undo" functionality.
+ */
 public class ProfileFragment extends Fragment {
 
     private UserViewModel viewModel;
     private UserProfile currentUserProfile;
 
-    // רכיבי UI ראשיים
+    // --- Main UI Components ---
     private ImageView imageProfile;
     private Button buttonChangeImage;
     private TextInputEditText editName, editPhone;
     private TextView textUserType;
 
-    // קונטיינרים (מחזיקים את כל השדות לכל סוג משתמש)
+    // --- Containers (Hold specific fields per user type) ---
     private LinearLayout containerCustomerInfo;
     private LinearLayout containerMoverInfo;
 
-    // --- שדות לקוח ---
+    // --- Customer Specific Fields ---
     private TextView tvFromAddress, tvToAddress, tvMoveDate;
     private Button btnPickFromAddress, btnPickToAddress, btnPickMoveDate;
     private TextInputEditText editFloor, editApartment;
 
-    // --- שדות מוביל ---
+    // --- Mover Specific Fields ---
     private TextView tvMoverBaseAddress, tvRadiusLabel;
     private Button btnPickMoverLocation;
     private Slider sliderRadius;
     private TextInputEditText editAbout;
 
-    // --- כפתורים כלליים ---
+    // --- Action Buttons & States ---
     private Button buttonEdit, buttonSave, buttonCancel;
     private LinearLayout layoutSaveCancel;
     private TextView textError;
     private ProgressBar progressBar;
 
+    // --- Image & Place Picking ---
     private Uri selectedImageUri = null;
     private ActivityResultLauncher<String> pickImageLauncher;
 
-    private enum AddressPickType { FROM, TO, MOVER }
+    private enum AddressPickType {FROM, TO, MOVER}
+
     private AddressPickType currentPickType = AddressPickType.MOVER;
 
+    // --- Edit Mode State & Backup ---
     private boolean isEditMode = false;
 
-    // גיבוי לביטול עריכה
-    private String oldName, oldPhone, oldAbout, oldFromAddress, oldToAddress;
+    private String oldFromAddress;
+    private String oldToAddress;
     private String oldFloorStr, oldApartmentStr;
     private long oldMoveDate = 0;
 
-    // גיבוי למוביל
+    // Backup for Mover specifics
     private String oldMoverBaseAddress, oldGeohash;
     private double oldLat, oldLng;
     private int oldRadius;
 
     private long selectedMoveDate = 0;
 
+    /**
+     * Launcher for Google Places Autocomplete Activity.
+     */
     private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                     Place place = Autocomplete.getPlaceFromIntent(result.getData());
-                    if (place != null) {
-                        if (currentPickType == AddressPickType.MOVER) updateMoverLocation(place);
-                        else if (currentPickType == AddressPickType.FROM) updateCustomerFromAddress(place);
-                        else if (currentPickType == AddressPickType.TO) updateCustomerToAddress(place);
-                    }
+                    handlePlaceSelection(place);
                 }
             }
     );
 
-    public ProfileFragment() { }
+    public ProfileFragment() {
+        // Required empty public constructor
+    }
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -124,6 +141,7 @@ public class ProfileFragment extends Fragment {
 
         viewModel = new ViewModelProvider(this).get(UserViewModel.class);
 
+        // Initialize Places API if needed
         if (!Places.isInitialized()) {
             Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
         }
@@ -136,18 +154,18 @@ public class ProfileFragment extends Fragment {
     }
 
     private void initViews(View view) {
-        // ראש ופרטים אישיים
+        // Header & Personal Info
         imageProfile = view.findViewById(R.id.image_profile);
         buttonChangeImage = view.findViewById(R.id.button_change_image);
         editName = view.findViewById(R.id.edit_name);
         editPhone = view.findViewById(R.id.edit_phone);
         textUserType = view.findViewById(R.id.text_user_type);
 
-        // קונטיינרים
+        // Containers
         containerCustomerInfo = view.findViewById(R.id.container_customer_info);
         containerMoverInfo = view.findViewById(R.id.container_mover_info);
 
-        // לקוח
+        // Customer UI
         tvFromAddress = view.findViewById(R.id.tv_from_address);
         btnPickFromAddress = view.findViewById(R.id.btnPickFromAddress);
         tvToAddress = view.findViewById(R.id.tv_to_address);
@@ -157,14 +175,14 @@ public class ProfileFragment extends Fragment {
         editFloor = view.findViewById(R.id.edit_floor);
         editApartment = view.findViewById(R.id.edit_apartment);
 
-        // מוביל
+        // Mover UI
         tvMoverBaseAddress = view.findViewById(R.id.tvMoverBaseAddress);
         btnPickMoverLocation = view.findViewById(R.id.btnPickMoverLocation);
         tvRadiusLabel = view.findViewById(R.id.tvRadiusLabel);
         sliderRadius = view.findViewById(R.id.sliderRadius);
         editAbout = view.findViewById(R.id.edit_about);
 
-        // כללי
+        // General UI
         buttonEdit = view.findViewById(R.id.button_edit_profile);
         layoutSaveCancel = view.findViewById(R.id.layout_save_cancel);
         buttonSave = view.findViewById(R.id.button_save_profile);
@@ -174,23 +192,26 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupListeners() {
+        // Image Picker
         pickImageLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 uri -> {
                     if (uri != null) {
                         selectedImageUri = uri;
-                        // ✅ תיקון: שימוש ב-Glide גם כאן כדי לחתוך לעיגול מיד בבחירה
+                        // Load immediately into UI
                         Glide.with(this)
                                 .load(uri)
                                 .circleCrop()
                                 .into(imageProfile);
-
-                        viewModel.uploadProfileImage(uri); // העלאה מיידית
+                        // Upload immediately
+                        viewModel.uploadProfileImage(uri);
                     }
                 }
         );
 
         buttonChangeImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+
+        // Edit Mode Controls
         buttonEdit.setOnClickListener(v -> enterEditMode());
 
         buttonSave.setOnClickListener(v -> {
@@ -200,7 +221,7 @@ public class ProfileFragment extends Fragment {
 
         buttonCancel.setOnClickListener(v -> cancelEditMode());
 
-        // כפתורי לקוח
+        // Customer Buttons
         btnPickFromAddress.setOnClickListener(v -> {
             currentPickType = AddressPickType.FROM;
             openPlacePicker();
@@ -211,12 +232,13 @@ public class ProfileFragment extends Fragment {
         });
         btnPickMoveDate.setOnClickListener(v -> openDatePicker());
 
-        // כפתורי מוביל
+        // Mover Buttons
         btnPickMoverLocation.setOnClickListener(v -> {
             currentPickType = AddressPickType.MOVER;
             openPlacePicker();
         });
 
+        // Radius Slider
         sliderRadius.addOnChangeListener((slider, value, fromUser) -> {
             if (fromUser && currentUserProfile != null) {
                 currentUserProfile.setServiceRadiusKm((int) value);
@@ -226,6 +248,7 @@ public class ProfileFragment extends Fragment {
     }
 
     private void observeViewModel() {
+        // Observe Profile Data
         viewModel.getMyProfileLiveData().observe(getViewLifecycleOwner(), profile -> {
             if (profile != null) {
                 currentUserProfile = profile;
@@ -233,6 +256,7 @@ public class ProfileFragment extends Fragment {
             }
         });
 
+        // Observe Errors
         viewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null && !msg.isEmpty()) {
                 textError.setText(msg);
@@ -242,10 +266,12 @@ public class ProfileFragment extends Fragment {
             }
         });
 
+        // Observe Loading State
         viewModel.getIsLoadingLiveData().observe(getViewLifecycleOwner(),
                 isLoading -> progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE)
         );
 
+        // Observe Image Upload Success
         viewModel.getUploadedImageUrlLiveData().observe(getViewLifecycleOwner(), url -> {
             if (url != null && currentUserProfile != null) {
                 currentUserProfile.setProfileImageUrl(url);
@@ -254,6 +280,9 @@ public class ProfileFragment extends Fragment {
         });
     }
 
+    /**
+     * Populates the UI fields based on the UserProfile object.
+     */
     private void fillUiFromProfile(@NonNull UserProfile profile) {
         editName.setText(profile.getName());
         editPhone.setText(profile.getPhone());
@@ -262,8 +291,8 @@ public class ProfileFragment extends Fragment {
         if (type == null) type = "customer";
         textUserType.setText(type);
 
+        // Load Profile Image
         if (profile.getProfileImageUrl() != null && !profile.getProfileImageUrl().isEmpty()) {
-            // ✅ תיקון: הוספת circleCrop() כדי לחתוך את התמונה לעיגול
             Glide.with(this)
                     .load(profile.getProfileImageUrl())
                     .circleCrop()
@@ -273,7 +302,7 @@ public class ProfileFragment extends Fragment {
             imageProfile.setImageResource(R.drawable.ic_profile_placeholder);
         }
 
-        // בחירת הקונטיינר הנכון להצגה
+        // Toggle UI based on User Type
         if ("mover".equals(type)) {
             setupMoverUi(profile);
         } else {
@@ -287,7 +316,7 @@ public class ProfileFragment extends Fragment {
 
         if (profile.getAbout() != null) editAbout.setText(profile.getAbout());
 
-        // שליפת כתובת בסיס מהרשימה
+        // Get Base Address from Service Areas list
         String baseAddress = "טרם הוגדר בסיס יציאה";
         List<String> areas = profile.getServiceAreas();
         if (areas != null && !areas.isEmpty()) {
@@ -320,64 +349,82 @@ public class ProfileFragment extends Fragment {
         editApartment.setText(profile.getApartment() != null ? String.valueOf(profile.getApartment()) : "");
     }
 
-    // --- Places & Date Picker ---
+    // ------------------------------------------------------------------------
+    // Places & Date Logic
+    // ------------------------------------------------------------------------
 
     private void openPlacePicker() {
         List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.LAT_LNG, Place.Field.ADDRESS, Place.Field.ADDRESS_COMPONENTS);
         Autocomplete.IntentBuilder builder = new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).setCountry("IL");
-        if (currentPickType != AddressPickType.MOVER) builder.setTypeFilter(TypeFilter.ADDRESS);
+
+        // If picking a specific address (not a city/area), filter for addresses
+        if (currentPickType != AddressPickType.MOVER) {
+            builder.setTypeFilter(TypeFilter.ADDRESS);
+        }
         placePickerLauncher.launch(builder.build(requireContext()));
     }
 
-    private boolean hasStreetNumber(@Nullable Place place) {
-        if (place == null || place.getAddressComponents() == null) return false;
-        for (AddressComponent c : place.getAddressComponents().asList()) {
-            if (c.getTypes() != null && c.getTypes().contains("street_number")) return true;
+    private void handlePlaceSelection(Place place) {
+        if (currentPickType == AddressPickType.MOVER) {
+            updateMoverLocation(place);
+        } else if (currentPickType == AddressPickType.FROM) {
+            updateCustomerFromAddress(place);
+        } else if (currentPickType == AddressPickType.TO) {
+            updateCustomerToAddress(place);
         }
-        return false;
+    }
+
+    private boolean NotHasStreetNumber(@Nullable Place place) {
+        if (place == null || place.getAddressComponents() == null) return true;
+        for (AddressComponent c : place.getAddressComponents().asList()) {
+            c.getTypes();
+            if (c.getTypes().contains("street_number")) return false;
+        }
+        return true;
     }
 
     private void updateCustomerFromAddress(Place place) {
         if (currentUserProfile == null || place.getAddress() == null) return;
-        if (!hasStreetNumber(place)) {
+        if (NotHasStreetNumber(place)) {
             Toast.makeText(getContext(), "בחרי כתובת מלאה עם מספר בית", Toast.LENGTH_SHORT).show();
             return;
         }
         tvFromAddress.setText(place.getAddress());
         currentUserProfile.setDefaultFromAddress(place.getAddress());
-        currentUserProfile.setFromLat(place.getLatLng().latitude);
+        currentUserProfile.setFromLat(Objects.requireNonNull(place.getLatLng()).latitude);
         currentUserProfile.setFromLng(place.getLatLng().longitude);
     }
 
     private void updateCustomerToAddress(Place place) {
         if (currentUserProfile == null || place.getAddress() == null) return;
-        if (!hasStreetNumber(place)) {
+        if (NotHasStreetNumber(place)) {
             Toast.makeText(getContext(), "בחרי כתובת מלאה עם מספר בית", Toast.LENGTH_SHORT).show();
             return;
         }
         tvToAddress.setText(place.getAddress());
         currentUserProfile.setDefaultToAddress(place.getAddress());
-        currentUserProfile.setToLat(place.getLatLng().latitude);
+        currentUserProfile.setToLat(Objects.requireNonNull(place.getLatLng()).latitude);
         currentUserProfile.setToLng(place.getLatLng().longitude);
     }
 
     private void updateMoverLocation(Place place) {
-        if (place.getLatLng() == null || currentUserProfile == null || place.getAddress() == null) return;
+        if (place.getLatLng() == null || currentUserProfile == null || place.getAddress() == null)
+            return;
 
-        tvMoverBaseAddress.setText(place.getAddress()); // עדכון ויזואלי מיידי
+        tvMoverBaseAddress.setText(place.getAddress());
 
         currentUserProfile.setLat(place.getLatLng().latitude);
         currentUserProfile.setLng(place.getLatLng().longitude);
         currentUserProfile.setGeohash(GeoFireUtils.getGeoHashForLocation(new GeoLocation(place.getLatLng().latitude, place.getLatLng().longitude)));
 
-        // עדכון רשימת אזורי השירות (האיבר הראשון)
+        // Update Service Areas list (Index 0 is considered the base)
         List<String> areas = currentUserProfile.getServiceAreas();
         if (areas == null) areas = new java.util.ArrayList<>();
         if (!areas.isEmpty()) areas.set(0, place.getAddress());
         else areas.add(place.getAddress());
         currentUserProfile.setServiceAreas(areas);
 
-        // גיבוי גם לכתובת מוצא רגילה (ליתר ביטחון)
+        // Also update default address for consistency
         currentUserProfile.setDefaultFromAddress(place.getAddress());
     }
 
@@ -397,10 +444,16 @@ public class ProfileFragment extends Fragment {
     }
 
     private Integer parseOptionalInt(String s) {
-        try { return Integer.parseInt(s.trim()); } catch (Exception e) { return null; }
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
-    // --- Edit Mode Logic ---
+    // ------------------------------------------------------------------------
+    // Edit Mode Logic (Backup/Restore)
+    // ------------------------------------------------------------------------
 
     private void enterEditMode() {
         isEditMode = true;
@@ -411,14 +464,20 @@ public class ProfileFragment extends Fragment {
     private void saveProfileFromUi() {
         if (currentUserProfile == null) currentUserProfile = new UserProfile();
 
-        currentUserProfile.setName(editName.getText().toString().trim());
-        currentUserProfile.setPhone(editPhone.getText().toString().trim());
+        String name = Objects.requireNonNull(editName.getText()).toString().trim();
+        if (TextUtils.isEmpty(name)) {
+            Toast.makeText(getContext(), "השם לא יכול להיות ריק", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        currentUserProfile.setName(name);
+        currentUserProfile.setPhone(Objects.requireNonNull(editPhone.getText()).toString().trim());
 
         if ("mover".equals(currentUserProfile.getUserType())) {
-            currentUserProfile.setAbout(editAbout.getText().toString().trim());
+            currentUserProfile.setAbout(Objects.requireNonNull(editAbout.getText()).toString().trim());
         } else {
-            currentUserProfile.setFloor(parseOptionalInt(editFloor.getText().toString()));
-            currentUserProfile.setApartment(parseOptionalInt(editApartment.getText().toString()));
+            currentUserProfile.setFloor(parseOptionalInt(Objects.requireNonNull(editFloor.getText()).toString()));
+            currentUserProfile.setApartment(parseOptionalInt(Objects.requireNonNull(editApartment.getText()).toString()));
             currentUserProfile.setDefaultMoveDate(selectedMoveDate);
         }
 
@@ -426,10 +485,14 @@ public class ProfileFragment extends Fragment {
         Toast.makeText(getContext(), "הפרופיל נשמר", Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * Cancels edit mode and restores the data to its previous state.
+     */
     private void cancelEditMode() {
         isEditMode = false;
         restoreData();
-        fillUiFromProfile(currentUserProfile); // רענון ה-UI מהאובייקט המשוחזר
+        // Refresh UI from the restored object
+        fillUiFromProfile(currentUserProfile);
         updateUiMode();
     }
 
@@ -439,45 +502,45 @@ public class ProfileFragment extends Fragment {
     }
 
     private void updateUiMode() {
-        // שדות טקסט
+        // Text Fields
         editName.setEnabled(isEditMode);
         editPhone.setEnabled(isEditMode);
         editFloor.setEnabled(isEditMode);
         editApartment.setEnabled(isEditMode);
         editAbout.setEnabled(isEditMode);
 
-        // כפתורים
+        // Buttons visibility
         buttonEdit.setVisibility(isEditMode ? View.GONE : View.VISIBLE);
         layoutSaveCancel.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
         buttonChangeImage.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
 
-        // כפתורי בחירה (לקוח)
-        btnPickFromAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-        btnPickToAddress.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-        btnPickMoveDate.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
-
-        // כפתורי בחירה (מוביל)
-        btnPickMoverLocation.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+        // Pickers
+        int pickerVisibility = isEditMode ? View.VISIBLE : View.GONE;
+        btnPickFromAddress.setVisibility(pickerVisibility);
+        btnPickToAddress.setVisibility(pickerVisibility);
+        btnPickMoveDate.setVisibility(pickerVisibility);
+        btnPickMoverLocation.setVisibility(pickerVisibility);
         sliderRadius.setEnabled(isEditMode);
     }
 
     private void backupCurrentData() {
-        oldName = editName.getText().toString();
-        oldPhone = editPhone.getText().toString();
+        // Backup variables to support "Cancel Edit"
+        String oldName = Objects.requireNonNull(editName.getText()).toString();
+        String oldPhone = Objects.requireNonNull(editPhone.getText()).toString();
 
         if (currentUserProfile != null) {
             if ("mover".equals(currentUserProfile.getUserType())) {
-                oldAbout = editAbout.getText().toString();
+                String oldAbout = Objects.requireNonNull(editAbout.getText()).toString();
                 oldRadius = currentUserProfile.getServiceRadiusKm();
-                // גיבוי מיקום
+                // Backup location
                 List<String> areas = currentUserProfile.getServiceAreas();
                 oldMoverBaseAddress = (areas != null && !areas.isEmpty()) ? areas.get(0) : "";
                 oldLat = currentUserProfile.getLat();
                 oldLng = currentUserProfile.getLng();
                 oldGeohash = currentUserProfile.getGeohash();
             } else {
-                oldFloorStr = editFloor.getText().toString();
-                oldApartmentStr = editApartment.getText().toString();
+                oldFloorStr = Objects.requireNonNull(editFloor.getText()).toString();
+                oldApartmentStr = Objects.requireNonNull(editApartment.getText()).toString();
                 oldFromAddress = currentUserProfile.getDefaultFromAddress();
                 oldToAddress = currentUserProfile.getDefaultToAddress();
                 oldMoveDate = selectedMoveDate;
@@ -485,22 +548,23 @@ public class ProfileFragment extends Fragment {
         }
     }
 
+    /**
+     * Reverts the fields in `currentUserProfile` to the backed-up values.
+     */
     private void restoreData() {
         if (currentUserProfile == null) return;
 
-        editName.setText(oldName);
-        editPhone.setText(oldPhone);
-
+        // Note: We only update the Object here. UI update happens in fillUiFromProfile()
         if ("mover".equals(currentUserProfile.getUserType())) {
-            editAbout.setText(oldAbout);
             currentUserProfile.setServiceRadiusKm(oldRadius);
-
-            // שחזור מיקום מוביל
+            // Restore location
             currentUserProfile.setLat(oldLat);
             currentUserProfile.setLng(oldLng);
             currentUserProfile.setGeohash(oldGeohash);
+
             List<String> areas = new java.util.ArrayList<>();
-            if (oldMoverBaseAddress != null && !oldMoverBaseAddress.isEmpty()) areas.add(oldMoverBaseAddress);
+            if (oldMoverBaseAddress != null && !oldMoverBaseAddress.isEmpty())
+                areas.add(oldMoverBaseAddress);
             currentUserProfile.setServiceAreas(areas);
 
         } else {

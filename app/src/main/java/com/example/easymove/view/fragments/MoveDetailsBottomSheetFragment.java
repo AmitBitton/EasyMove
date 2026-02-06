@@ -21,25 +21,45 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+/**
+ * BottomSheetFragment for displaying extended details of a Move.
+ * * Features:
+ * 1. General Move Details (Source, Dest, Date, Customer Name).
+ * 2. Existing Partner Details (if a partner is already assigned).
+ * 3. Pending Partner Requests (Actions: Approve/Reject).
+ * 4. Cancellation Requests (Actions: Mover approves customer cancel).
+ */
 public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
 
-    // נתונים להצגה
+    private static final String ARG_MOVE = "move_data";
+    private static final String ARG_PENDING_REQ = "pending_req_data";
+
+    // Data objects
     private MoveRequest move;
     private MatchRequest pendingRequest;
 
-    // מאזין לאירועים
+    // Action Listener
     private OnActionListener listener;
 
+    /**
+     * Interface to handle actions triggered from this sheet.
+     */
     public interface OnActionListener {
         void onApprove(MatchRequest req);
         void onReject(MatchRequest req);
         void onApproveCancel(MoveRequest move);
     }
 
+    /**
+     * Factory method to create a new instance with necessary data.
+     * Uses Bundle arguments to survive configuration changes (rotation).
+     */
     public static MoveDetailsBottomSheetFragment newInstance(MoveRequest move, MatchRequest pendingRequest) {
         MoveDetailsBottomSheetFragment fragment = new MoveDetailsBottomSheetFragment();
-        fragment.move = move;
-        fragment.pendingRequest = pendingRequest;
+        Bundle args = new Bundle();
+        args.putSerializable(ARG_MOVE, move);
+        args.putSerializable(ARG_PENDING_REQ, pendingRequest);
+        fragment.setArguments(args);
         return fragment;
     }
 
@@ -57,28 +77,36 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // --- חיבור ל-UI (הצגת נתונים כלליים של ההובלה) ---
+        // 1. Unpack Arguments
+        if (getArguments() != null) {
+            move = (MoveRequest) getArguments().getSerializable(ARG_MOVE);
+            pendingRequest = (MatchRequest) getArguments().getSerializable(ARG_PENDING_REQ);
+        }
+
+        // 2. Initialize UI Components
         TextView tvCustomer = view.findViewById(R.id.bsCustomerName);
         TextView tvSource = view.findViewById(R.id.bsSource);
         TextView tvDest = view.findViewById(R.id.bsDest);
         TextView tvDate = view.findViewById(R.id.bsDate);
 
+        // --- General Move Details ---
         if (move != null) {
             tvSource.setText(move.getSourceAddress());
             tvDest.setText(move.getDestAddress());
+
             if (move.getMoveDate() > 0) {
                 SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
                 tvDate.setText(sdf.format(new Date(move.getMoveDate())));
             }
 
-            // שליפת שם הלקוח הראשי (זה שיצר את ההובלה)
+            // Fetch Main Customer Name
             if (move.getCustomerId() != null) {
                 new UserRepository().getUserNameById(move.getCustomerId())
                         .addOnSuccessListener(tvCustomer::setText);
             }
         }
 
-        // --- הצגת שותף קיים (אם כבר אושר בעבר) ---
+        // --- Existing Partner Section ---
         LinearLayout layoutExisting = view.findViewById(R.id.layoutExistingPartner);
         TextView tvExName = view.findViewById(R.id.bsExistingPartnerName);
         TextView tvExAddr = view.findViewById(R.id.bsExistingPartnerAddress);
@@ -86,22 +114,23 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
         if (move != null && move.getPartnerId() != null && !move.getPartnerId().isEmpty()) {
             layoutExisting.setVisibility(View.VISIBLE);
             tvExAddr.setText("איסוף מ: " + move.getIntermediateAddress());
-            new UserRepository().getUserNameById(move.getPartnerId()).addOnSuccessListener(tvExName::setText);
+
+            new UserRepository().getUserNameById(move.getPartnerId())
+                    .addOnSuccessListener(tvExName::setText);
         } else {
             layoutExisting.setVisibility(View.GONE);
         }
 
-        // --- הצגת בקשה ממתינה (החלק של האישור - הריבוע הצהוב) ---
+        // --- Pending Request Section (The "Yellow Box") ---
         CardView cardPending = view.findViewById(R.id.bsCardPendingRequest);
         TextView tvPendingInfo = view.findViewById(R.id.bsPendingInfo);
         Button btnApprove = view.findViewById(R.id.bsBtnApprove);
         Button btnReject = view.findViewById(R.id.bsBtnReject);
 
-        // אם יש בקשה ממתינה לאישור
         if (pendingRequest != null) {
             cardPending.setVisibility(View.VISIBLE);
 
-            // ✅ התיקון הגדול: מציגים את toUserName (השותף) ולא את fromUserName
+            // Display the Partner's Name (toUserName)
             String partnerName = pendingRequest.getToUserName();
             if (partnerName == null || partnerName.isEmpty()) {
                 partnerName = "שותף (שם לא זמין)";
@@ -113,13 +142,13 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
 
             tvPendingInfo.setText(info);
 
-            // לחיצה על אישור
+            // Approve Action
             btnApprove.setOnClickListener(v -> {
                 if (listener != null) listener.onApprove(pendingRequest);
                 dismiss();
             });
 
-            // לחיצה על דחייה
+            // Reject Action
             btnReject.setOnClickListener(v -> {
                 if (listener != null) listener.onReject(pendingRequest);
                 dismiss();
@@ -128,19 +157,21 @@ public class MoveDetailsBottomSheetFragment extends BottomSheetDialogFragment {
             cardPending.setVisibility(View.GONE);
         }
 
-        // --- כפתור “אשר ביטול” (רלוונטי רק אם הלקוח ביקש לבטל) ---
+        // --- "Approve Cancel" Section (Only if Customer requested cancel) ---
         Button btnApproveCancel = view.findViewById(R.id.bsBtnApproveCancel);
+
         boolean cancelPending = move != null
                 && move.getCancelRequestPending() != null
                 && move.getCancelRequestPending();
 
         btnApproveCancel.setVisibility(cancelPending ? View.VISIBLE : View.GONE);
+
         btnApproveCancel.setOnClickListener(v -> {
             if (listener != null && move != null) listener.onApproveCancel(move);
             dismiss();
         });
 
-        // כפתור סגירה כללי
+        // Close Button
         view.findViewById(R.id.bsBtnClose).setOnClickListener(v -> dismiss());
     }
 }

@@ -36,33 +36,71 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.messaging.FirebaseMessaging;
 
+/**
+ * The Main Entry point of the application after authentication.
+ * It manages:
+ * 1. The Navigation Drawer (Side menu).
+ * 2. The Bottom Navigation Bar (Context-aware based on User Type).
+ * 3. Fragment navigation.
+ * 4. Handling Deep Links/Notifications (e.g., opening a specific chat).
+ */
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
-    private FirebaseAuth auth;
-    private FirebaseFirestore db;
+    // Constants to prevent magic strings
+    private static final String TYPE_CUSTOMER = "customer";
+    private static final String TYPE_MOVER = "mover";
+    private static final int PERMISSION_REQUEST_CODE = 101;
 
-    // רכיבי UI
+    // Firebase
+    private FirebaseAuth auth;
+
+    // UI Components
     private BottomNavigationView bottomNav;
     private DrawerLayout drawerLayout;
-    private NavigationView navigationView;
-    private Toolbar toolbar;
 
+    // State
     private String userType;
-    private static final int PERMISSION_REQUEST_CODE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // 1. Initialize Firebase
         auth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-        toolbar = findViewById(R.id.toolbar);
+        // 2. Setup UI
+        initViews();
+
+        // 3. Permission Check (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERMISSION_REQUEST_CODE);
+            }
+        }
+
+        // 4. Check Auth Status
+        FirebaseUser currentUser = auth.getCurrentUser();
+        if (currentUser == null) {
+            startAuth();
+            return;
+        }
+
+        // 5. Initial Data Load
+        updateFcmToken();
+        checkUserProfile(currentUser.getUid());
+    }
+
+    /**
+     * Initialize UI components and listeners.
+     */
+    private void initViews() {
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         drawerLayout = findViewById(R.id.drawer_layout);
-        navigationView = findViewById(R.id.nav_view);
+        NavigationView navigationView = findViewById(R.id.nav_view);
         bottomNav = findViewById(R.id.bottom_navigation);
 
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -73,57 +111,53 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         navigationView.setNavigationItemSelectedListener(this);
         bottomNav.setOnItemSelectedListener(this::onBottomNavItemSelected);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERMISSION_REQUEST_CODE);
-            }
-        }
-
-        FirebaseUser currentUser = auth.getCurrentUser();
-        if (currentUser == null) {
-            startAuth();
-            return;
-        }
-
-        updateFcmToken();
-        checkUserProfile(currentUser.getUid());
     }
 
+    /**
+     * Handles clicks on the Side Drawer menu items.
+     */
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
+        Fragment fragment = null;
+        String title = "";
 
         if (id == R.id.nav_drawer_profile) {
-            replaceFragment(new ProfileFragment());
-            getSupportActionBar().setTitle("אזור אישי");
-
+            fragment = new ProfileFragment();
+            title = "אזור אישי";
         } else if (id == R.id.nav_drawer_history) {
-            replaceFragment(new MoveHistoryFragment());
-            getSupportActionBar().setTitle("היסטוריית הובלות");
-
-        }else if (id == R.id.nav_settings) {
-            replaceFragment(new SettingsFragment());
-            getSupportActionBar().setTitle("הגדרות");
-
+            fragment = new MoveHistoryFragment();
+            title = "היסטוריית הובלות";
+        } else if (id == R.id.nav_settings) {
+            fragment = new SettingsFragment();
+            title = "הגדרות";
         } else if (id == R.id.nav_notifications) {
-            replaceFragment(new NotificationsFragment());
-            getSupportActionBar().setTitle("התראות");
-
+            fragment = new NotificationsFragment();
+            title = "התראות";
         } else if (id == R.id.nav_drawer_logout) {
             logout();
+            return true;
+        }
+
+        if (fragment != null) {
+            replaceFragment(fragment);
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle(title);
         }
 
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
     }
 
+    /**
+     * Handles clicks on the Bottom Navigation Bar items.
+     * Logic changes based on User Type (Customer vs Mover).
+     */
     private boolean onBottomNavItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
         Fragment fragment = null;
         String title = "";
 
-        if ("customer".equals(userType)) {
+        if (TYPE_CUSTOMER.equals(userType)) {
             if (id == R.id.nav_my_move) {
                 fragment = new MyMoveFragment();
                 title = "המעבר שלי";
@@ -134,13 +168,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 fragment = new ChatsFragment();
                 title = "הצ'אטים שלי";
             }
-        }
-        else if ("mover".equals(userType)) {
+        } else if (TYPE_MOVER.equals(userType)) {
             if (id == R.id.nav_my_deliveries) {
                 fragment = new MyDeliveriesFragment();
                 title = "הובלות פתוחות";
-            }
-            else if (id == R.id.nav_chats) {
+            } else if (id == R.id.nav_chats) {
                 fragment = new ChatsFragment();
                 title = "הצ'אטים שלי";
             }
@@ -148,7 +180,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         if (fragment != null) {
             replaceFragment(fragment);
-            if (!title.isEmpty()) {
+            if (getSupportActionBar() != null) {
                 getSupportActionBar().setTitle(title);
             }
             return true;
@@ -156,29 +188,33 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return false;
     }
 
+    /**
+     * Fetches the user profile from UserSession to determine User Type (Customer/Mover).
+     * Sets up the correct Bottom Navigation Menu and handles Deep Linking (Notifications).
+     */
     private void checkUserProfile(String uid) {
         UserSession.getInstance().ensureStarted().addOnSuccessListener(profile -> {
             if (profile != null) {
                 userType = profile.getUserType();
-                if (userType == null) userType = "customer";
+                if (userType == null) userType = TYPE_CUSTOMER; // Default fallback
 
                 setupBottomNav(userType);
 
-                // ✅ אם המשתמש כבר נמצא במסך כלשהו (למשל אחרי סיבוב), לא מחליפים
+                // Only load default fragment if we are not restoring state
                 if (getSupportFragmentManager().findFragmentById(R.id.fragmentContainer) == null) {
 
-                    // ✅ ניתוב חכם לפי התראות
+                    // 1. Check if we opened via Notification (Deep Link)
                     if (checkIntentForNotifications()) {
-                        return; // טופל ע"י הפונקציה, לא טוענים מסך ברירת מחדל
+                        return; // Handled, skip default fragment
                     }
 
-                    // מסך ברירת מחדל רגיל
-                    if ("customer".equals(userType)) {
+                    // 2. Load Default Fragment
+                    if (TYPE_CUSTOMER.equals(userType)) {
                         replaceFragment(new MyMoveFragment());
-                        getSupportActionBar().setTitle("המעבר שלי");
+                        if (getSupportActionBar() != null) getSupportActionBar().setTitle("המעבר שלי");
                     } else {
                         replaceFragment(new MyDeliveriesFragment());
-                        getSupportActionBar().setTitle("הובלות");
+                        if (getSupportActionBar() != null) getSupportActionBar().setTitle("הובלות");
                     }
                 }
             }
@@ -188,12 +224,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
     }
 
-    // ✅ הפונקציה המשודרגת שמטפלת בכל סוגי ההתראות
+    /**
+     * Checks if the Activity was started with specific extras (from a Notification click).
+     * Handles routing to Chat or specific Request pages.
+     *
+     * @return true if a deep link was handled, false otherwise.
+     */
     private boolean checkIntentForNotifications() {
         if (getIntent() != null && getIntent().getExtras() != null) {
             Bundle extras = getIntent().getExtras();
 
-            // 1. טיפול בצ'אט
+            // 1. Handle Chat Notification
             String chatId = extras.getString("chatId");
             if (chatId != null) {
                 Intent chatIntent = new Intent(this, com.example.easymove.view.activities.ChatActivity.class);
@@ -202,20 +243,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 return true;
             }
 
-            // 2. טיפול בבקשות והודעות מערכת
+            // 2. Handle System Requests (Partner Request / Approval)
             String type = extras.getString("type");
-
             if (type != null) {
-                if ("partner_request".equals(type) && "customer".equals(userType)) {
-                    // לקוח קיבל בקשת שותפות -> "המעבר שלי"
+                if ("partner_request".equals(type) && TYPE_CUSTOMER.equals(userType)) {
                     replaceFragment(new MyMoveFragment());
-                    getSupportActionBar().setTitle("המעבר שלי");
+                    if (getSupportActionBar() != null) getSupportActionBar().setTitle("המעבר שלי");
                     return true;
-                }
-                else if ("mover_partner_approval".equals(type) && "mover".equals(userType)) {
-                    // מוביל קיבל אישור שותף -> "הובלות פתוחות"
+                } else if ("mover_partner_approval".equals(type) && TYPE_MOVER.equals(userType)) {
                     replaceFragment(new MyDeliveriesFragment());
-                    getSupportActionBar().setTitle("הובלות פתוחות");
+                    if (getSupportActionBar() != null) getSupportActionBar().setTitle("הובלות פתוחות");
                     return true;
                 }
             }
@@ -223,19 +260,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return false;
     }
 
-    // כאשר לוחצים על התראה והאפליקציה כבר פתוחה ברקע (SingleTop)
+    /**
+     * Called when the activity receives a new Intent (e.g., clicking a notification while app is running).
+     */
     @Override
-    protected void onNewIntent(Intent intent) {
+    protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
-        setIntent(intent); // מעדכנים את האינטנט הנוכחי
-        // כאן אפשר לקרוא שוב ל-checkIntentForNotifications אם רוצים ריענון מיידי
-        // אבל לרוב ה-Activity יאותחל מחדש דרך onCreate אם הוא לא היה בפורגראונד
+        setIntent(intent); // Update the current intent
+
+        // Immediately check if this new intent requires navigation
+        // (Since checkUserProfile might have already run)
+        if (userType != null) {
+            checkIntentForNotifications();
+        }
     }
 
     private void setupBottomNav(String userType) {
         bottomNav.getMenu().clear();
 
-        if ("customer".equals(userType)) {
+        if (TYPE_CUSTOMER.equals(userType)) {
             bottomNav.inflateMenu(R.menu.bottom_nav_customer);
         } else {
             bottomNav.inflateMenu(R.menu.bottom_nav_mover);
@@ -252,7 +295,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void logout() {
         auth.signOut();
-        UserSession.getInstance().stop();
+        UserSession.getInstance().stop(); // Clear session cache
         startAuth();
     }
 
@@ -261,6 +304,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         finish();
     }
 
+    /**
+     * Refreshes the FCM token and updates it in Firestore.
+     * Crucial for receiving Push Notifications.
+     */
     private void updateFcmToken() {
         FirebaseMessaging.getInstance().getToken()
                 .addOnCompleteListener(task -> {

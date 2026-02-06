@@ -1,13 +1,15 @@
 package com.example.easymove.view.fragments;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.PopupMenu;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -27,15 +29,23 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.List;
 
+/**
+ * Fragment responsible for managing the user's Inventory.
+ * Features:
+ * 1. Displaying the list of items.
+ * 2. Adding new items (via FAB).
+ * 3. Deleting items (via Adapter callback).
+ * 4. Sorting the list (Date, Quantity, Room, Fragility).
+ * 5. Filtering the list (By Room, Fragility).
+ */
 public class InventoryFragment extends Fragment {
 
     private InventoryViewModel viewModel;
     private InventoryAdapter adapter;
-    private TextView textEmpty;
-    private TextView tvActiveFilters; // הטקסט שמציג אם יש סינון פעיל
 
-    // משתנים לשמירת מצב הסינון הזמני בדיאלוג
-    private int tempSelectedRoomIndex = 0;
+    // UI Components
+    private TextView textEmpty;
+    private TextView tvActiveFilters; // Indicates if filters are currently applied
 
     @Nullable
     @Override
@@ -47,9 +57,11 @@ public class InventoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        viewModel = new ViewModelProvider(this, ViewModelFactoryProvider.factory).get(InventoryViewModel.class);
+        // Initialize ViewModel using a Factory to ensure dependencies are passed correctly
+        viewModel = new ViewModelProvider(this, ViewModelFactoryProvider.getFactory())
+                .get(InventoryViewModel.class);
 
-        // חיבור רכיבים
+        // 1. Initialize UI Elements
         RecyclerView recyclerView = view.findViewById(R.id.recyclerInventory);
         textEmpty = view.findViewById(R.id.textEmptyInventory);
         tvActiveFilters = view.findViewById(R.id.tvActiveFilters);
@@ -57,10 +69,12 @@ public class InventoryFragment extends Fragment {
         Button btnSort = view.findViewById(R.id.btnSort);
         Button btnFilter = view.findViewById(R.id.btnFilter);
 
+        // 2. Setup RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new InventoryAdapter(new InventoryAdapter.OnItemClickListener() {
             @Override
             public void onDeleteClick(InventoryItem item) {
+                // Confirm deletion with user
                 new AlertDialog.Builder(getContext())
                         .setTitle("מחיקה")
                         .setMessage("למחוק את " + item.getName() + "?")
@@ -70,35 +84,40 @@ public class InventoryFragment extends Fragment {
             }
 
             @Override
-            public void onItemClick(InventoryItem item) { }
+            public void onItemClick(InventoryItem item) {
+                // Optional: Open Edit Dialog here in the future
+            }
         });
         recyclerView.setAdapter(adapter);
 
-        // --- Observers ---
+        // 3. Observe ViewModel Data
         viewModel.getInventoryList().observe(getViewLifecycleOwner(), items -> {
             adapter.setItems(items);
+            // Toggle "Empty State" text visibility
             textEmpty.setVisibility(items == null || items.isEmpty() ? View.VISIBLE : View.GONE);
         });
 
+        // Observe Toast messages (Success/Error feedback)
         viewModel.getToastMessage().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
         });
 
-        // --- Listeners לכפתורי מיון וסינון ---
-
-        btnSort.setOnClickListener(v -> showSortMenu(v));
-
+        // 4. Setup Button Listeners
+        btnSort.setOnClickListener(this::showSortMenu);
         btnFilter.setOnClickListener(v -> showFilterDialog());
-
         fab.setOnClickListener(v -> {
             AddItemDialogFragment dialog = new AddItemDialogFragment();
             dialog.show(getChildFragmentManager(), "AddItemDialog");
         });
     }
 
+    /**
+     * Displays a PopupMenu for sorting options.
+     */
     private void showSortMenu(View v) {
         PopupMenu popup = new PopupMenu(getContext(), v);
-        // יצירת התפריט ידנית בקוד (או דרך XML resource)
+
+        // Add menu items programmatically
         popup.getMenu().add(0, 1, 0, "תאריך (מהחדש לישן)");
         popup.getMenu().add(0, 2, 0, "כמות (מהגדול לקטן)");
         popup.getMenu().add(0, 3, 0, "חדר (א-ת)");
@@ -124,53 +143,62 @@ public class InventoryFragment extends Fragment {
         popup.show();
     }
 
+    /**
+     * Displays a custom Dialog for filtering the inventory list.
+     * Allows filtering by Room Name and Fragility status.
+     */
     private void showFilterDialog() {
-        // 1. הכנת הנתונים
+        // 1. Prepare Data
         List<String> rooms = viewModel.getUniqueRooms();
 
-        // 2. ניפוח ה-XML שיצרנו
+        // 2. Inflate Custom Layout
         View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_filter_inventory, null);
 
-        // 3. איתור הרכיבים מתוך ה-View
-        android.widget.Spinner spinnerRooms = dialogView.findViewById(R.id.spinnerFilterRoom);
-        android.widget.CheckBox cbFragile = dialogView.findViewById(R.id.cbFilterFragile);
+        // 3. Find Views inside the dialog
+        Spinner spinnerRooms = dialogView.findViewById(R.id.spinnerFilterRoom);
+        CheckBox cbFragile = dialogView.findViewById(R.id.cbFilterFragile);
 
-        // 4. הגדרת האדפטר לספינר
-        android.widget.ArrayAdapter<String> adapterRooms = new android.widget.ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_dropdown_item, rooms);
+        // 4. Setup Spinner Adapter
+        ArrayAdapter<String> adapterRooms = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, rooms);
+        adapterRooms.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerRooms.setAdapter(adapterRooms);
 
-        // ✅ טיפ: אם כבר יש סינון פעיל, נציג אותו כבחור מראש
-        // (זה דורש לשמור את המצב ב-ViewModel ולחשוף אותו, אבל כרגע נשאיר פשוט)
-
-        // 5. בניית הדיאלוג - בלי setSingleChoiceItems!
+        // 5. Build Dialog
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle("סינון מלאי");
-        builder.setView(dialogView); // רק ה-View שלנו
+        builder.setView(dialogView);
 
+        // Action: Apply Filter
         builder.setPositiveButton("סנן", (dialog, which) -> {
             String selectedRoom = (String) spinnerRooms.getSelectedItem();
             boolean isFragile = cbFragile.isChecked();
 
-            // שליחת הנתונים ל-ViewModel
+            // Send to ViewModel
             viewModel.setFilters(selectedRoom, isFragile);
 
-            // עדכון טקסט חיווי למשתמש
+            // Update UI indication
             updateFilterText(selectedRoom, isFragile);
         });
 
+        // Action: Reset Filter
         builder.setNegativeButton("בטל סינון", (dialog, which) -> {
             viewModel.setFilters(null, false);
             tvActiveFilters.setVisibility(View.GONE);
         });
 
-        builder.setNeutralButton("ביטול", null); // סוגר את החלון בלי לשנות כלום
+        // Action: Cancel (Do nothing)
+        builder.setNeutralButton("ביטול", null);
 
         builder.show();
     }
 
+    /**
+     * Updates the text view showing which filters are currently active.
+     */
     private void updateFilterText(String room, boolean fragile) {
         StringBuilder sb = new StringBuilder("מסנן: ");
         boolean active = false;
+
         if (room != null && !room.equals("הכל")) {
             sb.append("חדר: ").append(room).append(" ");
             active = true;
@@ -189,15 +217,21 @@ public class InventoryFragment extends Fragment {
         }
     }
 
+    // ------------------------------------------------------------------------
+    // Lifecycle Management
+    // ------------------------------------------------------------------------
+
     @Override
     public void onStart() {
         super.onStart();
+        // Start listening to Real-time updates from Firestore
         if (viewModel != null) viewModel.startInventoryListener();
     }
 
     @Override
     public void onStop() {
         super.onStop();
+        // Detach listener to save resources
         if (viewModel != null) viewModel.stopInventoryListener();
     }
 }

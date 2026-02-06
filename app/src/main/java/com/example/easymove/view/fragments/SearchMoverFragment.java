@@ -1,5 +1,6 @@
 package com.example.easymove.view.fragments;
 
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.os.Bundle;
@@ -23,6 +24,7 @@ import com.example.easymove.BuildConfig;
 import com.example.easymove.R;
 import com.example.easymove.adapters.MoversAdapter;
 import com.example.easymove.model.UserProfile;
+import com.example.easymove.view.activities.ChatActivity;
 import com.example.easymove.viewmodel.ChatViewModel;
 import com.example.easymove.viewmodel.UserViewModel;
 import com.google.android.gms.maps.model.LatLng;
@@ -37,29 +39,40 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 
+/**
+ * Fragment responsible for searching for Movers based on location (GeoFire).
+ * Features:
+ * 1. Google Places Autocomplete for Source/Destination.
+ * 2. Date Picker for move date.
+ * 3. "Fill from Profile" shortcut.
+ * 4. Displays a list of Movers within a radius.
+ * 5. Initiates Chat with a selected Mover.
+ */
 public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMoverActionClickListener {
 
     private UserViewModel userViewModel;
     private ChatViewModel chatViewModel;
     private MoversAdapter adapter;
-    private Button btnFillFromProfile;
     private UserProfile myProfile;
 
+    // UI Components
+    private Button btnFillFromProfile;
     private TextView tvSource, tvDest;
     private Button btnSearch;
-
-    // --- משתנים לתאריך ולוגיקה ---
     private Button btnSelectDate;
+
+    // Logic State
     private long selectedDate = 0;
     private UserProfile selectedMoverForChat;
-
     private LatLng sourceLatLng = null;
     private LatLng destLatLng = null;
 
     private boolean hasSearched = false;
-    private boolean isSelectingSource = true;
+    private boolean isSelectingSource = true; // Flag to determine which address is being picked
 
-    // משגר לבחירת כתובת
+    /**
+     * Launcher for Google Places Autocomplete.
+     */
     private final ActivityResultLauncher<Intent> placePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -80,16 +93,25 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // אתחול מפות גוגל
+        // 1. Initialize Google Places API
         if (!Places.isInitialized()) {
             Places.initialize(requireContext(), BuildConfig.MAPS_KEY);
         }
 
-        // אתחול ViewModels
+        // 2. Initialize ViewModels
         userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
-        // חיבור ל-XML
+        // 3. Setup UI & Listeners
+        initViews(view);
+        setupListeners();
+        observeViewModel();
+
+        // 4. Load User Profile (for "Fill from Profile" feature)
+        userViewModel.loadMyProfile();
+    }
+
+    private void initViews(View view) {
         tvSource = view.findViewById(R.id.tvSourceResult);
         tvDest = view.findViewById(R.id.tvDestResult);
         btnSearch = view.findViewById(R.id.btnSearchAction);
@@ -98,17 +120,11 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
 
         RecyclerView recycler = view.findViewById(R.id.recyclerMovers);
         recycler.setLayoutManager(new LinearLayoutManager(getContext()));
-
         adapter = new MoversAdapter(this);
         recycler.setAdapter(adapter);
+    }
 
-        // טעינת פרופיל
-        userViewModel.loadMyProfile();
-        userViewModel.getMyProfileLiveData().observe(getViewLifecycleOwner(), profile -> {
-            myProfile = profile;
-        });
-
-        // מאזינים
+    private void setupListeners() {
         btnFillFromProfile.setOnClickListener(v -> fillFromProfile());
 
         tvSource.setOnClickListener(v -> {
@@ -121,22 +137,17 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
             openPlacePicker();
         });
 
-        btnSelectDate.setOnClickListener(v -> {
-            Calendar calendar = Calendar.getInstance();
-            new DatePickerDialog(getContext(), (view1, year, month, dayOfMonth) -> {
-                Calendar chosen = Calendar.getInstance();
-                chosen.set(year, month, dayOfMonth);
-                selectedDate = chosen.getTimeInMillis();
-                btnSelectDate.setText(dayOfMonth + "/" + (month + 1) + "/" + year);
-            },
-                    calendar.get(Calendar.YEAR),
-                    calendar.get(Calendar.MONTH),
-                    calendar.get(Calendar.DAY_OF_MONTH)).show();
-        });
+        btnSelectDate.setOnClickListener(v -> openDatePicker());
 
         btnSearch.setOnClickListener(v -> performSearch());
+    }
 
-        // Observers
+    private void observeViewModel() {
+        // Observe Profile Data
+        userViewModel.getMyProfileLiveData().observe(getViewLifecycleOwner(), profile ->
+                myProfile = profile);
+
+        // Observe Search Results
         userViewModel.getMoversListLiveData().observe(getViewLifecycleOwner(), movers -> {
             adapter.setMovers(movers);
             if (hasSearched && movers.isEmpty()) {
@@ -144,24 +155,27 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
             }
         });
 
+        // Observe Move Details Saving (Pre-requisite for Chat)
         userViewModel.getMoveDetailsSaved().observe(getViewLifecycleOwner(), saved -> {
             if (saved != null && saved) {
                 if (selectedMoverForChat != null) {
                     chatViewModel.startChatWithMover(selectedMoverForChat);
-                    selectedMoverForChat = null;
+                    selectedMoverForChat = null; // Reset
                 }
             }
         });
 
+        // Observe Navigation to Chat
         chatViewModel.getNavigateToChatId().observe(getViewLifecycleOwner(), chatId -> {
             if (chatId != null) {
-                chatViewModel.onChatNavigated();
-                Intent intent = new Intent(getContext(), com.example.easymove.view.activities.ChatActivity.class);
+                chatViewModel.onChatNavigated(); // Clear navigation event
+                Intent intent = new Intent(requireContext(), ChatActivity.class);
                 intent.putExtra("CHAT_ID", chatId);
                 startActivity(intent);
             }
         });
 
+        // Observe Errors
         userViewModel.getErrorMessageLiveData().observe(getViewLifecycleOwner(), error -> {
             if (error != null) Toast.makeText(getContext(), error, Toast.LENGTH_SHORT).show();
         });
@@ -171,35 +185,38 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         });
     }
 
+    // ------------------------------------------------------------------------
+    // Logic: Places & Address Selection
+    // ------------------------------------------------------------------------
+
     private void openPlacePicker() {
-        // הוספתי את ADDRESS לרשימת השדות, זה קריטי לבדיקה
         List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS);
         Intent intent = new Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).build(requireContext());
         placePickerLauncher.launch(intent);
     }
 
-    // ✅ פונקציית בדיקה: האם הכתובת מכילה מספר?
+    /**
+     * Validates if an address string contains a number (indicating a street number).
+     */
     private boolean hasStreetNumber(String address) {
         if (address == null) return false;
-        // Regex פשוט שבודק אם יש לפחות ספרה אחת בכתובת
+        // Simple Regex to check if the string contains at least one digit
         return address.matches(".*\\d.*");
     }
 
-    // ✅ פונקציית הטיפול בבחירה המעודכנת
     private void handleAddressSelection(Place place) {
         if (place.getLatLng() == null) return;
 
-        // שימוש ב-Address המלא (יותר מדויק מ-Name)
+        // Prefer full address, fallback to name
         String fullAddress = place.getAddress();
-        if (fullAddress == null) fullAddress = place.getName(); // Fallback
+        if (fullAddress == null) fullAddress = place.getName();
 
-        // 🛑 בדיקת ולידציה: האם יש מספר רחוב?
+        // Validation: Ensure precise address
         if (!hasStreetNumber(fullAddress)) {
             Toast.makeText(getContext(), "חובה לבחור כתובת מדויקת עם מספר רחוב!", Toast.LENGTH_LONG).show();
-            return; // עוצרים כאן ולא שומרים
+            return;
         }
 
-        // אם תקין - ממשיכים
         if (isSelectingSource) {
             tvSource.setText(fullAddress);
             sourceLatLng = place.getLatLng();
@@ -210,64 +227,36 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         btnSearch.setEnabled(sourceLatLng != null && destLatLng != null);
     }
 
+    // ------------------------------------------------------------------------
+    // Logic: Search & Date
+    // ------------------------------------------------------------------------
+
+    private void openDatePicker() {
+        Calendar calendar = Calendar.getInstance();
+        new DatePickerDialog(requireContext(), (view1, year, month, dayOfMonth) -> {
+            Calendar chosen = Calendar.getInstance();
+            chosen.set(year, month, dayOfMonth);
+            selectedDate = chosen.getTimeInMillis();
+            btnSelectDate.setText(dayOfMonth + "/" + (month + 1) + "/" + year);
+        },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)).show();
+    }
+
     private void performSearch() {
         if (sourceLatLng != null) {
             hasSearched = true;
+            // Clear previous results
             adapter.setMovers(new ArrayList<>());
+            // Trigger search in ViewModel
             userViewModel.searchMoversByLocation(sourceLatLng);
         }
     }
 
-    @Override
-    public void onChatClick(UserProfile mover) {
-        if (selectedDate == 0) {
-            Toast.makeText(getContext(), "אנא בחר תאריך הובלה לפני יצירת קשר", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (tvSource.getText().toString().isEmpty() || tvDest.getText().toString().isEmpty()) {
-            Toast.makeText(getContext(), "אנא בחר כתובות מוצא ויעד", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        this.selectedMoverForChat = mover;
-        userViewModel.saveMoveDetails(
-                FirebaseAuth.getInstance().getUid(),
-                tvSource.getText().toString(),
-                tvDest.getText().toString(),
-                selectedDate
-        );
-    }
-
-    @Override
-    public void onDetailsClick(UserProfile mover) {
-        new android.app.AlertDialog.Builder(getContext())
-                .setTitle("על " + mover.getName())
-                .setMessage(mover.getAbout() != null ? mover.getAbout() : "אין מידע נוסף")
-                .setPositiveButton("סגור", null)
-                .show();
-    }
-
-    @Override
-    public void onReviewsClick(UserProfile mover) {
-        String moverId = mover.getUserId();
-        String moverName = mover.getName();
-        if (moverId == null || moverId.trim().isEmpty()) {
-            Toast.makeText(getContext(), "שגיאה: חסר moverId", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        MoverReviewsFragment fragment = MoverReviewsFragment.newInstance(moverId, moverName);
-        requireActivity().getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragmentContainer, fragment)
-                .addToBackStack(null)
-                .commit();
-    }
-
-    @Override
-    public void onReportClick(UserProfile mover) {
-        Toast.makeText(getContext(), "דיווח על " + mover.getName() + " נשלח לאדמין", Toast.LENGTH_LONG).show();
-    }
-
+    /**
+     * Populates fields from the user's saved profile (if available).
+     */
     private void fillFromProfile() {
         if (myProfile == null) {
             Toast.makeText(getContext(), "הפרופיל עדיין נטען, נסי שוב בעוד רגע", Toast.LENGTH_SHORT).show();
@@ -314,5 +303,63 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
 
         btnSearch.setEnabled(true);
         Toast.makeText(getContext(), "הפרטים מולאו מהאזור האישי", Toast.LENGTH_SHORT).show();
+    }
+
+    // ------------------------------------------------------------------------
+    // Adapter Callbacks (OnMoverActionClickListener)
+    // ------------------------------------------------------------------------
+
+    @Override
+    public void onChatClick(UserProfile mover) {
+        if (selectedDate == 0) {
+            Toast.makeText(getContext(), "אנא בחר תאריך הובלה לפני יצירת קשר", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (tvSource.getText().toString().isEmpty() || tvDest.getText().toString().isEmpty()) {
+            Toast.makeText(getContext(), "אנא בחר כתובות מוצא ויעד", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        this.selectedMoverForChat = mover;
+
+        // Save move details first, then Observer triggers chat
+        userViewModel.saveMoveDetails(
+                FirebaseAuth.getInstance().getUid(),
+                tvSource.getText().toString(),
+                tvDest.getText().toString(),
+                selectedDate
+        );
+    }
+
+    @Override
+    public void onDetailsClick(UserProfile mover) {
+        new AlertDialog.Builder(getContext())
+                .setTitle("על " + mover.getName())
+                .setMessage(mover.getAbout() != null ? mover.getAbout() : "אין מידע נוסף")
+                .setPositiveButton("סגור", null)
+                .show();
+    }
+
+    @Override
+    public void onReviewsClick(UserProfile mover) {
+        String moverId = mover.getUserId();
+        String moverName = mover.getName();
+
+        if (moverId == null || moverId.trim().isEmpty()) {
+            Toast.makeText(getContext(), "שגיאה: חסר moverId", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        MoverReviewsFragment fragment = MoverReviewsFragment.newInstance(moverId, moverName);
+        requireActivity().getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, fragment)
+                .addToBackStack(null)
+                .commit();
+    }
+
+    @Override
+    public void onReportClick(UserProfile mover) {
+        Toast.makeText(getContext(), "דיווח על " + mover.getName() + " נשלח לאדמין", Toast.LENGTH_LONG).show();
     }
 }

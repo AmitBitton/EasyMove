@@ -1,11 +1,33 @@
-package com.example.easymove.model; // מודלים
+package com.example.easymove.model;
 
+/**
+ * Interface defining the minimal data required to display an item in the Chats List.
+ * Any object implementing this (like {@link Chat}) can be displayed by the ChatsListAdapter.
+ */
 public interface ChatListItem {
-    // ממשק שמגדיר "מה צריך" כדי להציג פריט ברשימת צ'אטים
 
-    long getTimestampLong(); // מחזיר זמן (Long) לצורך מיון/הצגה
-    String getChatTitle();   // מחזיר את השם שיוצג (שם המוביל/ה או הלקוחה - בפועל שם הצד השני)
-    String getChatImageUrl(); // מחזיר URL לתמונת פרופיל להצגה
-    String getLastMessageText(); // מחזיר טקסט ההודעה האחרונה
-    String getId(); // מחזיר מזהה הצ'אט (doc id)
+    /**
+     * @return The unique ID of the chat (Firestore Document ID).
+     */
+    String getId();
+
+    /**
+     * @return The title to display (usually the name of the OTHER participant).
+     */
+    String getChatTitle();
+
+    /**
+     * @return The URL of the profile image to display.
+     */
+    String getChatImageUrl();
+
+    /**
+     * @return The text content of the last message sent in this chat.
+     */
+    String getLastMessageText();
+
+    /**
+     * @return The timestamp of the last activity in milliseconds. Used for sorting.
+     */
+    long getTimestampLong();
 }

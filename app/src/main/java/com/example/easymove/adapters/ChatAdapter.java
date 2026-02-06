@@ -1,126 +1,123 @@
-package com.example.easymove.adapters; // חבילת (package) האדפטרים באפליקציה
+package com.example.easymove.adapters;
 
-import android.view.LayoutInflater; // מאפשר "לנפח" (inflate) קבצי XML של פריטים לרכיבי View
-import android.view.View; // מחלקת בסיס לכל רכיב UI
-import android.view.ViewGroup; // קונטיינר של Views (כמו RecyclerView עצמו)
-import android.widget.LinearLayout; // Layout אופקי/אנכי
-import android.widget.TextView; // טקסט במסך
-import androidx.annotation.NonNull; // אנוטציה שמבטיחה שלא נשלח null
-import androidx.recyclerview.widget.RecyclerView; // RecyclerView + Adapter + ViewHolder
-import com.example.easymove.R; // גישה למשאבים (layouts, ids וכו')
-import com.example.easymove.model.Message; // מודל הודעה (senderId, senderName, text, timestamp)
-import java.text.SimpleDateFormat; // פורמט זמן להצגה
-import java.util.ArrayList; // רשימה דינמית
-import java.util.List; // ממשק לרשימה
-import java.util.Locale; // שפה/אזור לפורמט תאריך/שעה
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.example.easymove.R;
+import com.example.easymove.model.Message;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+
+/**
+ * Adapter responsible for displaying chat messages in a RecyclerView.
+ * It handles the distinction between sent messages (by the current user)
+ * and received messages (by others) by toggling the visibility of UI layouts.
+ */
 public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.MessageViewHolder> {
-    // אדפטר שמחבר בין רשימת הודעות (data) לבין תצוגה ב-RecyclerView (UI)
+
+    // Performance Optimization: Define formatter once to avoid creating it for every item bind.
+    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
     private List<Message> messages = new ArrayList<>();
-    // רשימת ההודעות שמוצגות במסך הצ'אט (מתעדכנת מה-Firestore בזמן אמת)
-
     private final String currentUserId;
-    // מזהה המשתמש הנוכחי (מי שמחובר), כדי לדעת להציג "הודעה שלי" מול "של הצד השני"
 
+    /**
+     * Constructor for ChatAdapter.
+     *
+     * @param currentUserId The UID of the currently logged-in user.
+     */
     public ChatAdapter(String currentUserId) {
-        // בנאי: מקבל את ה-UID של המשתמש הנוכחי ושומר אותו באדפטר
         this.currentUserId = currentUserId;
     }
 
+    /**
+     * Updates the list of messages and refreshes the UI.
+     *
+     * @param messages The new list of messages to display.
+     */
     public void setMessages(List<Message> messages) {
-        // פונקציה שמעדכנת את רשימת ההודעות שהאדפטר מציג
-        // קלט: messages = רשימת הודעות חדשה
-        // פלט: אין (void), אבל מעדכן UI בעזרת notifyDataSetChanged
-        this.messages = messages; // החלפה של הדאטה באדפטר
-        notifyDataSetChanged(); // אומר ל-RecyclerView "הדאטה השתנה, תצייר מחדש"
+        // Prevent NullPointerException if null is passed
+        this.messages = Objects.requireNonNullElseGet(messages, ArrayList::new);
+        notifyDataSetChanged();
     }
 
     @NonNull
     @Override
     public MessageViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        // נקראת כשה-RecyclerView צריך ליצור View חדש לפריט ברשימה
-        // קלט: parent = ה-RecyclerView שמכיל את הפריטים, viewType = סוג פריט (לא בשימוש כאן)
-        // פלט: ViewHolder שמחזיק את ה-View של פריט הודעה
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_message, parent, false);
-        // inflate של ה-XML item_message לקובץ View אמיתי
-        return new MessageViewHolder(view); // יצירת ViewHolder שמחזיק הפניות ל-Views שבתוך item_message
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_message, parent, false);
+        return new MessageViewHolder(view);
     }
 
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
-        // נקראת עבור כל שורה כדי "לקשור" (bind) נתונים ל-Views
-        // קלט: holder = המחזיק של ה-Views, position = מיקום הפריט ברשימה
-        // פלט: אין (void), אבל מעדכן את הטקסט/נראות לפי ההודעה
-        Message message = messages.get(position); // שליפת ההודעה המתאימה למיקום
+        Message message = messages.get(position);
 
-        // פורמט לשעה (למשל 14:30)
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        // יצירת פורמט של שעה:דקה בהתאם ללוקאל של המכשיר
-        String time = message.getTimestamp() != null ? sdf.format(message.getTimestamp().toDate()) : "";
-        // אם יש timestamp -> ממירים ל-Date ואז לפורמט HH:mm
-        // אם אין timestamp -> מציגים מחרוזת ריקה כדי לא לקרוס
+        // Format timestamp to readable string
+        String time = "";
+        if (message.getTimestamp() != null) {
+            time = TIME_FORMAT.format(message.getTimestamp().toDate());
+        }
 
-        // בדיקה מי שלח את ההודעה
+        // Determine if the message was sent by the current user or received
         if (message.getSenderId() != null && message.getSenderId().equals(currentUserId)) {
-            // --- הודעה שלי ---
-            holder.layoutMy.setVisibility(View.VISIBLE); // מציגים את הבועה של "שלי"
-            holder.layoutOther.setVisibility(View.GONE); // מסתירים את הבועה של "הצד השני"
+            // --- My Message ---
+            holder.layoutMy.setVisibility(View.VISIBLE);
+            holder.layoutOther.setVisibility(View.GONE);
 
-            holder.tvMessageMy.setText(message.getText()); // מציגים את טקסט ההודעה שלי
-            holder.tvTimeMy.setText(time); // מציגים את השעה ליד ההודעה שלי
+            holder.tvMessageMy.setText(message.getText());
+            holder.tvTimeMy.setText(time);
         } else {
-            // --- הודעה של הצד השני ---
-            holder.layoutMy.setVisibility(View.GONE); // מסתירים את הבועה של "שלי"
-            holder.layoutOther.setVisibility(View.VISIBLE); // מציגים את הבועה של "הצד השני"
+            // --- Other's Message ---
+            holder.layoutMy.setVisibility(View.GONE);
+            holder.layoutOther.setVisibility(View.VISIBLE);
 
-            holder.tvMessageOther.setText(message.getText()); // מציגים את טקסט ההודעה של הצד השני
-            holder.tvTimeOther.setText(time); // מציגים את השעה ליד ההודעה שלו/שלה
+            holder.tvMessageOther.setText(message.getText());
+            holder.tvTimeOther.setText(time);
             holder.tvNameOther.setText(message.getSenderName());
-            // מציגים שם שולח (כדי שיהיה ברור מי כתב, בעיקר אם בעתיד יהיה יותר ממשתתף)
         }
     }
 
     @Override
     public int getItemCount() {
-        // מחזירה כמה פריטים יש לאדפטר (כמה הודעות יוצגו)
-        // קלט: אין
-        // פלט: מספר ההודעות ברשימה
         return messages.size();
     }
 
+    /**
+     * ViewHolder class to cache view references for performance.
+     */
     static class MessageViewHolder extends RecyclerView.ViewHolder {
-        // ViewHolder: מחזיק הפניות ל-Views בתוך item_message כדי לא לחפש אותם כל פעם מחדש (יותר יעיל)
 
-        LinearLayout layoutMy, layoutOther;
-        // שני layouts שונים: אחד להודעה שלי ואחד להודעה של הצד השני
-
-        TextView tvMessageMy, tvTimeMy;
-        // הטקסט והשעה של ההודעה שלי
-
-        TextView tvMessageOther, tvTimeOther, tvNameOther;
-        // הטקסט, השעה, ושם השולח של ההודעה של הצד השני
+        final LinearLayout layoutMy;
+        final LinearLayout layoutOther;
+        final TextView tvMessageMy;
+        final TextView tvTimeMy;
+        final TextView tvMessageOther;
+        final TextView tvTimeOther;
+        final TextView tvNameOther;
 
         public MessageViewHolder(@NonNull View itemView) {
-            // בנאי שמקבל את ה-View של הפריט ומאתר בתוכו את כל רכיבי ה-UI לפי id
             super(itemView);
-
+            // My Message Views
             layoutMy = itemView.findViewById(R.id.layoutMessageMy);
-            // מצביע ל-layout של ההודעה שלי
-            layoutOther = itemView.findViewById(R.id.layoutMessageOther);
-            // מצביע ל-layout של ההודעה של הצד השני
-
             tvMessageMy = itemView.findViewById(R.id.tvMessageMy);
-            // הטקסט של ההודעה שלי
             tvTimeMy = itemView.findViewById(R.id.tvTimeMy);
-            // השעה של ההודעה שלי
 
+            // Other Message Views
+            layoutOther = itemView.findViewById(R.id.layoutMessageOther);
             tvMessageOther = itemView.findViewById(R.id.tvMessageOther);
-            // הטקסט של ההודעה של הצד השני
             tvTimeOther = itemView.findViewById(R.id.tvTimeOther);
-            // השעה של ההודעה של הצד השני
             tvNameOther = itemView.findViewById(R.id.tvNameOther);
-            // שם השולח של הצד השני
         }
     }
 }

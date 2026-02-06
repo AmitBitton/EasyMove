@@ -18,19 +18,25 @@ import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
  * UserRepository (EasyMove)
  * -------------------------
  * Single source of truth for all user-related operations in EasyMove.
+ * Handles Authentication, User Profiles, Partner Matching, and Notification Tokens.
  */
 public class UserRepository {
 
     private static final String TAG = "UserRepository";
+    private static final String COLLECTION_USERS = "users";
+    private static final String COLLECTION_MOVES = "moves";
+    private static final String COLLECTION_MATCH_REQUESTS = "match_requests";
 
     /* ---------- Firebase instances ---------- */
     private final FirebaseFirestore db = FirebaseFirestore.getInstance();
@@ -40,9 +46,12 @@ public class UserRepository {
     private String currentUserName;
 
     /* ---------------------------------------------------------
-     * Auth helpers
+     * Auth Helpers
      * --------------------------------------------------------- */
 
+    /**
+     * @return The current authenticated User ID, or null if not logged in.
+     */
     @Nullable
     public String getCurrentUserId() {
         FirebaseUser user = auth.getCurrentUser();
@@ -51,6 +60,9 @@ public class UserRepository {
         return uid;
     }
 
+    /**
+     * Helper to get the current UID or throw an exception if not authenticated.
+     */
     private String uidOrThrow() {
         String uid = getCurrentUserId();
         if (uid == null) {
@@ -61,9 +73,12 @@ public class UserRepository {
     }
 
     /* ---------------------------------------------------------
-     * Current user name helpers
+     * User Name Management
      * --------------------------------------------------------- */
 
+    /**
+     * Preloads the current user's name from Firestore for quick access.
+     */
     public void loadCurrentUserName() {
         String uid = getCurrentUserId();
         if (uid == null) {
@@ -71,7 +86,7 @@ public class UserRepository {
             return;
         }
 
-        db.collection("users").document(uid).get()
+        db.collection(COLLECTION_USERS).document(uid).get()
                 .addOnSuccessListener(snapshot -> {
                     UserProfile profile = snapshot.toObject(UserProfile.class);
                     if (profile != null && profile.getName() != null) {
@@ -91,19 +106,25 @@ public class UserRepository {
         return currentUserName;
     }
 
+    /**
+     * Fetches a user's name by their ID asynchronously.
+     */
     public Task<String> getUserNameById(String userId) {
         return getUserById(userId).continueWith(task -> {
             UserProfile profile = task.getResult();
             return (profile != null && profile.getName() != null)
                     ? profile.getName()
-                    : "אנונימי";
+                    : "Unknown User";
         });
     }
 
     /* ---------------------------------------------------------
-     * Profile read / write
+     * Profile Read / Write
      * --------------------------------------------------------- */
 
+    /**
+     * Fetches the full profile of the currently logged-in user.
+     */
     public Task<UserProfile> getMyProfile() {
         String uid = getCurrentUserId();
         Log.d(TAG, "getMyProfile: fetching profile for uid = " + uid);
@@ -113,13 +134,13 @@ public class UserRepository {
             return Tasks.forException(new IllegalStateException("User not logged in"));
         }
 
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .document(uid)
                 .get()
                 .continueWith(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "getMyProfile: Firestore get failed", task.getException());
-                        throw task.getException();
+                        throw Objects.requireNonNull(task.getException());
                     }
                     DocumentSnapshot snap = task.getResult();
                     if (snap != null && snap.exists()) {
@@ -135,6 +156,9 @@ public class UserRepository {
                 });
     }
 
+    /**
+     * Fetches the profile of any user by their ID.
+     */
     public Task<UserProfile> getUserById(String userId) {
         if (userId == null) {
             Log.e(TAG, "getUserById: userId is null");
@@ -143,13 +167,13 @@ public class UserRepository {
 
         Log.d(TAG, "getUserById: fetching user with id = " + userId);
 
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .document(userId)
                 .get()
                 .continueWith(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "getUserById: Firestore get failed", task.getException());
-                        throw task.getException();
+                        throw Objects.requireNonNull(task.getException());
                     }
                     DocumentSnapshot snap = task.getResult();
                     if (snap != null && snap.exists()) {
@@ -165,6 +189,9 @@ public class UserRepository {
                 });
     }
 
+    /**
+     * Saves or updates the current user's profile.
+     */
     public Task<Void> saveMyProfile(UserProfile profile) {
         if (profile == null) {
             Log.e(TAG, "saveMyProfile: profile is null");
@@ -179,10 +206,9 @@ public class UserRepository {
         }
 
         Log.d(TAG, "saveMyProfile: saving profile for uid = " + uid);
-
         profile.setUserId(uid);
 
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .document(uid)
                 .set(profile)
                 .addOnFailureListener(e ->
@@ -191,9 +217,12 @@ public class UserRepository {
     }
 
     /* ---------------------------------------------------------
-     * Profile image upload
+     * Profile Image Upload
      * --------------------------------------------------------- */
 
+    /**
+     * Uploads a profile image to Firebase Storage and returns the download URL.
+     */
     public Task<String> uploadProfileImage(@Nullable Uri imageUri) {
         if (imageUri == null) {
             Log.d(TAG, "uploadProfileImage: imageUri is null, returning null URL");
@@ -210,21 +239,20 @@ public class UserRepository {
         String fileName = "profile_" + uid + "_" + UUID.randomUUID();
         Log.d(TAG, "uploadProfileImage: uploading image fileName = " + fileName);
 
-        StorageReference ref = storage.getReference()
-                .child("profile_images/" + fileName);
+        StorageReference ref = storage.getReference().child("profile_images/" + fileName);
 
         return ref.putFile(imageUri)
                 .continueWithTask(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "uploadProfileImage: upload failed", task.getException());
-                        throw task.getException();
+                        throw Objects.requireNonNull(task.getException());
                     }
                     return ref.getDownloadUrl();
                 })
                 .continueWith(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "uploadProfileImage: failed to get download URL", task.getException());
-                        throw task.getException();
+                        throw Objects.requireNonNull(task.getException());
                     }
                     String url = task.getResult().toString();
                     Log.d(TAG, "uploadProfileImage: download URL = " + url);
@@ -233,46 +261,37 @@ public class UserRepository {
     }
 
     /* ---------------------------------------------------------
-     * Movers queries
+     * Movers Queries
      * --------------------------------------------------------- */
 
     public Task<QuerySnapshot> getAllMovers() {
         Log.d(TAG, "getAllMovers: fetching all movers");
-
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .whereEqualTo("userType", "mover")
                 .get()
-                .addOnFailureListener(e ->
-                        Log.e(TAG, "getAllMovers: failed to fetch movers", e)
-                );
+                .addOnFailureListener(e -> Log.e(TAG, "getAllMovers: failed", e));
     }
 
     public Task<QuerySnapshot> getMoversByAreas(@Nullable List<String> areas) {
         if (areas == null || areas.isEmpty()) {
-            Log.d(TAG, "getMoversByAreas: no areas provided, returning all movers");
             return getAllMovers();
         }
-
-        Log.d(TAG, "getMoversByAreas: fetching movers for areas = " + areas);
-
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .whereEqualTo("userType", "mover")
                 .whereArrayContainsAny("serviceAreas", areas)
                 .get()
-                .addOnFailureListener(e ->
-                        Log.e(TAG, "getMoversByAreas: failed to fetch movers", e)
-                );
+                .addOnFailureListener(e -> Log.e(TAG, "getMoversByAreas: failed", e));
     }
 
     public Task<QuerySnapshot> getMoversByArea(String area) {
         if (area == null || area.trim().isEmpty()) {
-            return Tasks.forException(new IllegalArgumentException("area is empty"));
+            return Tasks.forException(new IllegalArgumentException("Area is empty"));
         }
         return getMoversByAreas(List.of(area));
     }
 
     public Task<QuerySnapshot> getMoversByGeoHash(String startHash, String endHash) {
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .whereEqualTo("userType", "mover")
                 .orderBy("geohash")
                 .startAt(startHash)
@@ -281,62 +300,52 @@ public class UserRepository {
     }
 
     /* ---------------------------------------------------------
-     * Customers queries
+     * Customer Queries
      * --------------------------------------------------------- */
 
     public Task<QuerySnapshot> getAllCustomers() {
-        Log.d(TAG, "getAllCustomers: fetching all customers");
-
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .whereEqualTo("userType", "customer")
-                .get()
-                .addOnFailureListener(e ->
-                        Log.e(TAG, "getAllCustomers: failed to fetch customers", e)
-                );
+                .get();
     }
 
     public Task<QuerySnapshot> getAllCustomersExceptMe() {
-        String myUid = getCurrentUserId();
-        if (myUid == null) {
-            return Tasks.forException(new IllegalStateException("User not logged in"));
-        }
-        return db.collection("users")
+        // Note: Firestore does not support 'notEqualTo' efficiently in all cases.
+        // It's often better to fetch all and filter client-side, but standard query works for now.
+        return db.collection(COLLECTION_USERS)
                 .whereEqualTo("userType", "customer")
-                .get()
-                .addOnFailureListener(e ->
-                        Log.e(TAG, "getAllCustomersExceptMe: failed to fetch customers", e)
-                );
+                .get();
     }
 
-    // -----------------------------------------------------------
-    //  פונקציות לשידוך שותפים (Matchmaking)
-    // -----------------------------------------------------------
+    /* ---------------------------------------------------------
+     * Partner Matchmaking Logic
+     * --------------------------------------------------------- */
 
     /**
-     * מביא את כל הלקוחות (Customers) כדי שנוכל לחפש ביניהם.
+     * Fetches all potential partners (customers) for the matchmaking screen.
      */
     public Task<QuerySnapshot> getAllPotentialPartners() {
-        return db.collection("users")
+        return db.collection(COLLECTION_USERS)
                 .whereEqualTo("userType", "customer")
                 .get();
     }
 
     /**
-     * שליחת בקשת חברות למשתמש אחר (מתוקן)
-     * ✅ הוספנו את הפרמטר targetUserName כדי לשמור אותו בבקשה
+     * Sends a partnership request to another user.
+     * Requires the current user to have an Active Move (OPEN or CONFIRMED).
      */
     public Task<Void> sendMatchRequest(String targetUserId, String targetUserName) {
         String myUid = uidOrThrow();
 
-        // 1. שליפת ההובלה הפעילה כדי לקבל ID וכתובות
-        return db.collection("moves")
+        // 1. Fetch current active move to get IDs and addresses
+        return db.collection(COLLECTION_MOVES)
                 .whereEqualTo("customerId", myUid)
-                .whereIn("status", java.util.Arrays.asList("OPEN", "CONFIRMED"))
+                .whereIn("status", Arrays.asList("OPEN", "CONFIRMED"))
                 .limit(1)
                 .get()
                 .continueWithTask(moveTask -> {
                     if (!moveTask.isSuccessful() || moveTask.getResult().isEmpty()) {
-                        throw new Exception("לא נמצאה הובלה פעילה לצרף אליה שותף");
+                        throw new Exception("No active move found. Cannot send partner request.");
                     }
 
                     DocumentSnapshot moveDoc = moveTask.getResult().getDocuments().get(0);
@@ -344,51 +353,57 @@ public class UserRepository {
                     String source = moveDoc.getString("sourceAddress");
                     String dest = moveDoc.getString("destAddress");
 
-                    // 2. שליפת השם שלי
+                    // 2. Fetch my profile to get my name
                     return getUserById(myUid).continueWithTask(profileTask -> {
                         UserProfile myProfile = profileTask.getResult();
-                        String myName = (myProfile != null && myProfile.getName() != null) ? myProfile.getName() : "משתמש";
+                        String myName = (myProfile != null && myProfile.getName() != null)
+                                ? myProfile.getName() : "Unknown User";
 
-                        // 3. יצירת הבקשה עם הכתובות ועם שני השמות
+                        // 3. Create Request Object
                         MatchRequest request = new MatchRequest(
                                 myUid,
                                 myName,
                                 targetUserId,
-                                targetUserName, // ✅ הוספת השם החדש
+                                targetUserName,
                                 moveId,
                                 source,
                                 dest
                         );
 
-                        return db.collection("match_requests").add(request).continueWith(t -> null);
+                        return db.collection(COLLECTION_MATCH_REQUESTS).add(request).continueWith(t -> null);
                     });
                 });
     }
 
     /**
-     * מביא את כל הבקשות שממתינות לי (סטטוס pending).
+     * Fetches all pending partnership requests sent TO the current user.
      */
     public Task<QuerySnapshot> getIncomingRequests() {
         String myUid = uidOrThrow();
-        return db.collection("match_requests")
+        return db.collection(COLLECTION_MATCH_REQUESTS)
                 .whereEqualTo("toUserId", myUid)
                 .whereEqualTo("status", "pending")
                 .get();
     }
 
     /**
-     * עדכון סטטוס בקשה (אישור/דחייה).
+     * Updates the status of a match request (e.g., 'approved', 'rejected').
      */
     public Task<Void> updateMatchRequestStatus(String requestId, String newStatus) {
-        return db.collection("match_requests").document(requestId)
+        return db.collection(COLLECTION_MATCH_REQUESTS)
+                .document(requestId)
                 .update("status", newStatus);
     }
 
+    /* ---------------------------------------------------------
+     * Notifications & Settings
+     * --------------------------------------------------------- */
+
     /**
-     * בדיקה אם ההתראות דלוקות (האם קיים טוקן למשתמש)
+     * Checks if the user has Push Notifications enabled (i.e., has an FCM token).
      */
     public Task<Boolean> isNotificationEnabled(String userId) {
-        return db.collection("users").document(userId).get()
+        return db.collection(COLLECTION_USERS).document(userId).get()
                 .continueWith(task -> {
                     if (task.isSuccessful() && task.getResult() != null) {
                         String token = task.getResult().getString("fcmToken");
@@ -399,19 +414,19 @@ public class UserRepository {
     }
 
     /**
-     * שמירת טוקן (הפעלת התראות)
+     * Saves the FCM Token to the user's profile to enable notifications.
      */
     public Task<Void> updateFcmToken(String userId, String token) {
-        return db.collection("users").document(userId)
+        return db.collection(COLLECTION_USERS).document(userId)
                 .update("fcmToken", token);
     }
 
     /**
-     * מחיקת טוקן (כיבוי התראות)
+     * Removes the FCM Token to disable notifications.
      */
     public Task<Void> removeFcmToken(String userId) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("fcmToken", FieldValue.delete());
-        return db.collection("users").document(userId).update(updates);
+        return db.collection(COLLECTION_USERS).document(userId).update(updates);
     }
 }

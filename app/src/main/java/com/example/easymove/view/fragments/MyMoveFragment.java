@@ -18,7 +18,10 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.easymove.R;
+import com.example.easymove.model.MatchRequest;
 import com.example.easymove.model.MoveRequest;
+import com.example.easymove.model.repository.MoveRepository;
+import com.example.easymove.model.repository.UserRepository;
 import com.example.easymove.view.activities.ChatActivity;
 import com.example.easymove.viewmodel.MyMoveViewModel;
 import com.google.android.material.button.MaterialButton;
@@ -27,14 +30,26 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+/**
+ * Fragment that serves as the main dashboard for a Customer.
+ * It displays either:
+ * 1. A "Draft" move (based on profile settings) if no active order exists.
+ * 2. An "Active" move with full details, partner status, and actions.
+ * <p>
+ * Features:
+ * - View/Edit Inventory.
+ * - Cancel Move (with policy checks).
+ * - Chat with Mover.
+ * - Add/Approve Partners.
+ */
 public class MyMoveFragment extends Fragment {
 
     private MyMoveViewModel viewModel;
 
-    // UI elements
+    // UI Elements
     private TextView textNoMove;
     private CardView cardMoveDetails;
-    private TextView textTitle; // הוספתי קישור לכותרת
+    private TextView textTitle;
     private TextView textFrom, textTo, textDate;
     private TextView tvPartnerInfo, tvIntermediateAddress;
 
@@ -42,11 +57,14 @@ public class MyMoveFragment extends Fragment {
     private MaterialButton btnCancelMove;
     private MaterialButton btnChatWithMover;
 
+    // Incoming Request Card (Yellow Box)
     private CardView cardIncomingRequest;
     private TextView tvRequestDetails;
     private Button btnApproveReq, btnRejectReq;
 
-    public MyMoveFragment() { }
+    public MyMoveFragment() {
+        // Required empty public constructor
+    }
 
     @Nullable
     @Override
@@ -64,9 +82,11 @@ public class MyMoveFragment extends Fragment {
         setupButtons();
         observeViewModel();
 
+        // Load Data
         viewModel.loadCurrentMove();
 
-        String uid = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+        // Start listening for incoming partner requests
+        String uid = new MoveRepository().getCurrentUserId();
         if (uid != null) {
             viewModel.listenForMatchRequests(uid);
         }
@@ -75,8 +95,6 @@ public class MyMoveFragment extends Fragment {
     private void initViews(View view) {
         textNoMove = view.findViewById(R.id.textNoMove);
         cardMoveDetails = view.findViewById(R.id.cardMoveDetails);
-
-        // הוספתי את ה-ID הזה ב-XML למטה, חשוב!
         textTitle = view.findViewById(R.id.textTitle);
 
         textFrom = view.findViewById(R.id.textFrom);
@@ -97,27 +115,61 @@ public class MyMoveFragment extends Fragment {
         btnRejectReq = view.findViewById(R.id.btnRejectReq);
     }
 
+    private void setupButtons() {
+        // Chat Action
+        btnChatWithMover.setOnClickListener(v -> {
+            MoveRequest move = viewModel.getCurrentMove().getValue();
+            if (move != null && move.getChatId() != null) {
+                Intent intent = new Intent(requireContext(), ChatActivity.class);
+                intent.putExtra("CHAT_ID", move.getChatId());
+                startActivity(intent);
+            }
+        });
+
+        // Cancel Action
+        btnCancelMove.setOnClickListener(v -> onCancelClicked());
+
+        // Inventory Action
+        btnViewItems.setOnClickListener(v -> getParentFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, new InventoryFragment())
+                .addToBackStack(null)
+                .commit());
+
+        // Partner Match Action
+        btnAddPartner.setOnClickListener(v -> getParentFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, new PartnerMatchFragment())
+                .addToBackStack(null)
+                .commit());
+    }
+
     private void observeViewModel() {
+        // Observe Current Move
         viewModel.getCurrentMove().observe(getViewLifecycleOwner(), this::updateUI);
 
+        // Observe Errors
         viewModel.getErrorMsg().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
         });
 
-        viewModel.getIncomingRequest().observe(getViewLifecycleOwner(), req -> {
-            if (req != null) {
-                cardIncomingRequest.setVisibility(View.VISIBLE);
-                String info = req.getFromUserName() + " רוצה לחלוק איתך הובלה:\n" +
-                        "מוצא: " + req.getOriginalSourceAddress() + "\n" +
-                        "יעד: " + req.getOriginalDestAddress();
-                tvRequestDetails.setText(info);
+        // Observe Incoming Partner Requests
+        viewModel.getIncomingRequest().observe(getViewLifecycleOwner(), this::updateIncomingRequestUI);
+    }
 
-                btnApproveReq.setOnClickListener(v -> viewModel.approveMatch(req));
-                btnRejectReq.setOnClickListener(v -> viewModel.rejectMatch(req));
-            } else {
-                cardIncomingRequest.setVisibility(View.GONE);
-            }
-        });
+    private void updateIncomingRequestUI(MatchRequest req) {
+        if (req != null) {
+            cardIncomingRequest.setVisibility(View.VISIBLE);
+            String info = req.getFromUserName() + " רוצה לחלוק איתך הובלה:\n" +
+                    "מוצא: " + req.getOriginalSourceAddress() + "\n" +
+                    "יעד: " + req.getOriginalDestAddress();
+            tvRequestDetails.setText(info);
+
+            btnApproveReq.setOnClickListener(v -> viewModel.approveMatch(req));
+            btnRejectReq.setOnClickListener(v -> viewModel.rejectMatch(req));
+        } else {
+            cardIncomingRequest.setVisibility(View.GONE);
+        }
     }
 
     private void updateUI(MoveRequest move) {
@@ -130,7 +182,7 @@ public class MyMoveFragment extends Fragment {
         textNoMove.setVisibility(View.GONE);
         cardMoveDetails.setVisibility(View.VISIBLE);
 
-        // עדכון שדות טקסט
+        // Populate Common Fields
         textFrom.setText(move.getSourceAddress() != null ? move.getSourceAddress() : "טרם הוגדר");
         textTo.setText(move.getDestAddress() != null ? move.getDestAddress() : "טרם הוגדר");
 
@@ -148,43 +200,47 @@ public class MyMoveFragment extends Fragment {
             textDate.setTextColor(Color.GRAY);
         }
 
-        // ✅ בדיקה: האם זו הובלה אמיתית (יש ID) או טיוטה מהפרופיל (אין ID)
+        // Determine if this is a "Real" Move or just a "Draft" from profile
         boolean isRealMove = (move.getId() != null);
 
         if (!isRealMove) {
-            // --- מצב טיוטה (אין הובלה פעילה) ---
-            if (textTitle != null) textTitle.setText("המעבר המתוכנן שלי");
-
-            // מציגים רק את כפתור הרשומות
-            btnViewItems.setVisibility(View.VISIBLE);
-
-            // מסתירים את כל השאר
-            btnCancelMove.setVisibility(View.GONE);
-            btnAddPartner.setVisibility(View.GONE);
-            btnChatWithMover.setVisibility(View.GONE);
-            tvPartnerInfo.setVisibility(View.GONE);
-            tvIntermediateAddress.setVisibility(View.GONE);
-
+            updateDraftUI();
         } else {
-            // --- מצב הובלה פעילה (אמיתית) ---
-            if (textTitle != null) textTitle.setText("פרטי הובלה");
-
-            // מציגים כפתורים רלוונטיים
-            btnViewItems.setVisibility(View.VISIBLE);
-            btnCancelMove.setVisibility(View.VISIBLE); // הובלה פעילה אפשר לבטל
-
-            // לוגיקת שותפים וצ'אט המקורית שלך
-            handlePartnerAndChatUI(move);
+            updateActiveMoveUI(move);
             checkIfMoveIsFinished(move);
         }
     }
 
-    // הפונקציה המקורית שלך לניהול תצוגת שותפים (נקראת רק כשיש הובלה אמיתית)
+    private void updateDraftUI() {
+        if (textTitle != null) textTitle.setText("המעבר המתוכנן שלי");
+
+        // Only show Inventory button
+        btnViewItems.setVisibility(View.VISIBLE);
+
+        // Hide active move actions
+        btnCancelMove.setVisibility(View.GONE);
+        btnAddPartner.setVisibility(View.GONE);
+        btnChatWithMover.setVisibility(View.GONE);
+        tvPartnerInfo.setVisibility(View.GONE);
+        tvIntermediateAddress.setVisibility(View.GONE);
+    }
+
+    private void updateActiveMoveUI(MoveRequest move) {
+        if (textTitle != null) textTitle.setText("פרטי הובלה");
+
+        // Show relevant actions
+        btnViewItems.setVisibility(View.VISIBLE);
+        btnCancelMove.setVisibility(View.VISIBLE);
+
+        // Handle Partner & Chat visibility logic
+        handlePartnerAndChatUI(move);
+    }
+
     private void handlePartnerAndChatUI(MoveRequest move) {
-        String myId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+        String myId = new MoveRepository().getCurrentUserId();
 
         if (move.getPartnerId() != null && !move.getPartnerId().isEmpty()) {
-            // יש שותף!
+            // Case: Partner Exists
             btnAddPartner.setVisibility(View.GONE);
             tvPartnerInfo.setVisibility(View.VISIBLE);
 
@@ -198,14 +254,15 @@ public class MyMoveFragment extends Fragment {
             String otherId = myId.equals(move.getCustomerId()) ? move.getPartnerId() : move.getCustomerId();
             String label = myId.equals(move.getCustomerId()) ? "שותף:" : "הובלה ראשית של:";
 
-            new com.example.easymove.model.repository.UserRepository().getUserNameById(otherId)
+            // Fetch Partner Name
+            new UserRepository().getUserNameById(otherId)
                     .addOnSuccessListener(name -> tvPartnerInfo.setText("✅ " + label + " " + name));
         } else {
-            // אין שותף
+            // Case: No Partner
             tvPartnerInfo.setVisibility(View.GONE);
             tvIntermediateAddress.setVisibility(View.GONE);
 
-            // כפתור הוספה רק לבעלים
+            // Only the owner can add a partner
             if (myId.equals(move.getCustomerId())) {
                 btnAddPartner.setVisibility(View.VISIBLE);
             } else {
@@ -213,6 +270,7 @@ public class MyMoveFragment extends Fragment {
             }
         }
 
+        // Chat Button Logic: Only if confirmed and has chat ID
         if ("CONFIRMED".equals(move.getStatus()) && move.getChatId() != null && !move.getChatId().isEmpty()) {
             btnChatWithMover.setVisibility(View.VISIBLE);
         } else {
@@ -220,45 +278,22 @@ public class MyMoveFragment extends Fragment {
         }
     }
 
-    private void setupButtons() {
-        btnChatWithMover.setOnClickListener(v -> {
-            MoveRequest move = viewModel.getCurrentMove().getValue();
-            if (move != null && move.getChatId() != null) {
-                Intent intent = new Intent(getContext(), ChatActivity.class);
-                intent.putExtra("CHAT_ID", move.getChatId());
-                startActivity(intent);
-            }
-        });
-
-        btnCancelMove.setOnClickListener(v -> onCancelClicked());
-
-        btnViewItems.setOnClickListener(v -> {
-            getParentFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.fragmentContainer, new InventoryFragment())
-                    .addToBackStack(null)
-                    .commit();
-        });
-
-        btnAddPartner.setOnClickListener(v -> {
-            getParentFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.fragmentContainer, new com.example.easymove.view.fragments.PartnerMatchFragment())
-                    .addToBackStack(null)
-                    .commit();
-        });
-    }
-
+    /**
+     * Checks if the move date has passed (by 24 hours).
+     * If so, prompts the user to archive/complete the move.
+     */
     private void checkIfMoveIsFinished(MoveRequest move) {
         if ("CONFIRMED".equals(move.getStatus()) && move.getMoveDate() > 0) {
             long now = System.currentTimeMillis();
-            if (move.getMoveDate() < now - 86400000L) {
+            if (move.getMoveDate() < now - 86400000L) { // 24 hours passed
                 showCompletionDialog();
             }
         }
     }
 
     private void showCompletionDialog() {
+        if (getContext() == null) return;
+
         new AlertDialog.Builder(getContext())
                 .setTitle("האם ההובלה הסתיימה?")
                 .setMessage("ראינו שתאריך ההובלה עבר. האם המעבר בוצע בהצלחה?")
@@ -273,9 +308,9 @@ public class MyMoveFragment extends Fragment {
 
     private void onCancelClicked() {
         MoveRequest move = viewModel.getCurrentMove().getValue();
-        if (move == null || move.getId() == null) return; // הגנה
+        if (move == null || move.getId() == null) return;
 
-        String myId = new com.example.easymove.model.repository.MoveRepository().getCurrentUserId();
+        String myId = new MoveRepository().getCurrentUserId();
         if (myId == null) return;
 
         boolean iAmPartner = myId.equals(move.getPartnerId());
@@ -291,6 +326,7 @@ public class MyMoveFragment extends Fragment {
             long weekMs = 7L * 24L * 60L * 60L * 1000L;
             long moveDate = move.getMoveDate();
 
+            // Policy: Needs approval if less than a week away
             boolean needsMoverApproval = (moveDate > 0) && ((moveDate - now) < weekMs);
 
             if (needsMoverApproval) {
@@ -301,6 +337,8 @@ public class MyMoveFragment extends Fragment {
         } else {
             message = "אין לך הרשאה לבטל את ההובלה הזו.";
         }
+
+        if (getContext() == null) return;
 
         new AlertDialog.Builder(getContext())
                 .setTitle(title)

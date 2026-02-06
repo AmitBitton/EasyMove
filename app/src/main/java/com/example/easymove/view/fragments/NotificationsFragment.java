@@ -18,7 +18,9 @@ import com.example.easymove.R;
 import com.example.easymove.adapters.NotificationsAdapter;
 import com.example.easymove.model.NotificationItem;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.WriteBatch;
 
@@ -26,123 +28,91 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * NotificationsFragment
- * ---------------------
- * Displays the user's notifications list.
- *
+ * Fragment responsible for displaying the user's notification history.
+ * <p>
  * Features:
- * - Real-time updates using Firestore SnapshotListener
- * - Swipe left/right to delete a single notification
- * - "Clear all" button to delete all notifications
- * - Empty-state UI when no notifications exist
- *
- * Notifications are stored under:
- * users/{userId}/notifications
+ * 1. Real-time updates from Firestore.
+ * 2. Swipe-to-delete functionality.
+ * 3. "Clear All" batch deletion.
+ * 4. Empty state handling.
  */
 public class NotificationsFragment extends Fragment {
 
-    /** RecyclerView that displays notifications */
+    // UI Components
     private RecyclerView recyclerView;
-
-    /** Adapter that binds notification data */
     private NotificationsAdapter adapter;
-
-    /** In-memory list of notifications */
-    private List<NotificationItem> notificationList;
-
-    /** Text shown when there are no notifications */
     private TextView emptyStateText;
 
-    /** Firestore database instance */
+    // Data & Firebase
+    private List<NotificationItem> notificationList;
     private FirebaseFirestore db;
-
-    /** UID of the currently logged-in user */
     private String currentUserId;
+    private ListenerRegistration firestoreListener;
 
-    /**
-     * Inflates the fragment layout.
-     */
-    @Nullable
-    @Override
-    public View onCreateView(
-            @NonNull LayoutInflater inflater,
-            @Nullable ViewGroup container,
-            @Nullable Bundle savedInstanceState
-    ) {
-        return inflater.inflate(
-                R.layout.fragment_notifications,
-                container,
-                false
-        );
+    public NotificationsFragment() {
+        // Required empty public constructor
     }
 
-    /**
-     * Called after the fragment view is created.
-     * Initializes UI components, Firestore, and listeners.
-     */
+    @Nullable
     @Override
-    public void onViewCreated(
-            @NonNull View view,
-            @Nullable Bundle savedInstanceState
-    ) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.fragment_notifications, container, false);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // ---- Firebase Initialization ----
+        // 1. Initialize Firebase
         db = FirebaseFirestore.getInstance();
-        currentUserId = FirebaseAuth.getInstance()
-                .getCurrentUser()
-                .getUid();
+        if (FirebaseAuth.getInstance().getCurrentUser() != null) {
+            currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        } else {
+            return; // Should not happen if Auth flow is correct
+        }
 
-        // ---- View Binding ----
+        // 2. Initialize UI
         recyclerView = view.findViewById(R.id.recyclerNotifications);
         emptyStateText = view.findViewById(R.id.textEmptyState);
+        View tvClearAll = view.findViewById(R.id.tvClearAll);
 
-        // ---- RecyclerView Setup ----
-        recyclerView.setLayoutManager(
-                new LinearLayoutManager(getContext())
-        );
-
+        // 3. Setup RecyclerView
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         notificationList = new ArrayList<>();
         adapter = new NotificationsAdapter(notificationList);
         recyclerView.setAdapter(adapter);
 
-        // ---- Enable Swipe-to-Delete ----
+        // 4. Setup Features
         setupSwipeToDelete();
-
-        // ---- Load Notifications ----
         loadNotifications();
 
-        // ---- Clear All Notifications Button ----
-        View tvClearAll = view.findViewById(R.id.tvClearAll);
         if (tvClearAll != null) {
             tvClearAll.setOnClickListener(v -> clearAllNotifications());
         }
     }
 
     /**
-     * Loads notifications in real-time using a Firestore SnapshotListener.
-     * Automatically updates the UI when notifications are added or removed.
+     * Attaches a Real-time SnapshotListener to the user's notifications collection.
+     * Updates the list automatically whenever a document is added/removed.
      */
     private void loadNotifications() {
-        db.collection("users")
+        if (currentUserId == null) return;
+
+        firestoreListener = db.collection("users")
                 .document(currentUserId)
                 .collection("notifications")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener((value, error) -> {
-
                     if (error != null) return;
+                    if (value == null) return;
 
                     notificationList.clear();
 
-                    if (value != null) {
-                        for (var doc : value.getDocuments()) {
-                            NotificationItem item =
-                                    doc.toObject(NotificationItem.class);
-
-                            if (item != null) {
-                                item.setId(doc.getId());
-                                notificationList.add(item);
-                            }
+                    for (DocumentSnapshot doc : value.getDocuments()) {
+                        NotificationItem item = doc.toObject(NotificationItem.class);
+                        if (item != null) {
+                            item.setId(doc.getId()); // Inject Document ID
+                            notificationList.add(item);
                         }
                     }
 
@@ -152,7 +122,7 @@ public class NotificationsFragment extends Fragment {
     }
 
     /**
-     * Updates the empty-state UI depending on whether notifications exist.
+     * Toggles visibility of the "No Notifications" text.
      */
     private void updateEmptyState() {
         if (notificationList.isEmpty()) {
@@ -165,91 +135,77 @@ public class NotificationsFragment extends Fragment {
     }
 
     /**
-     * Enables swipe left/right gestures to delete individual notifications.
+     * Configures ItemTouchHelper to handle Swipe-to-Delete gestures.
      */
     private void setupSwipeToDelete() {
+        ItemTouchHelper.SimpleCallback swipeCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+                return false; // Drag & Drop not supported
+            }
 
-        ItemTouchHelper.SimpleCallback swipeCallback =
-                new ItemTouchHelper.SimpleCallback(
-                        0,
-                        ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT
-                ) {
-                    @Override
-                    public boolean onMove(
-                            @NonNull RecyclerView recyclerView,
-                            @NonNull RecyclerView.ViewHolder viewHolder,
-                            @NonNull RecyclerView.ViewHolder target
-                    ) {
-                        return false;
-                    }
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                int position = viewHolder.getAdapterPosition();
+                NotificationItem item = notificationList.get(position);
 
-                    @Override
-                    public void onSwiped(
-                            @NonNull RecyclerView.ViewHolder viewHolder,
-                            int direction
-                    ) {
-                        int position =
-                                viewHolder.getAdapterPosition();
-                        NotificationItem item =
-                                notificationList.get(position);
+                // Optimistic Remove from UI
+                notificationList.remove(position);
+                adapter.notifyItemRemoved(position);
+                updateEmptyState();
 
-                        // ---- Delete from Firestore ----
-                        db.collection("users")
-                                .document(currentUserId)
-                                .collection("notifications")
-                                .document(item.getId())
-                                .delete()
-                                .addOnSuccessListener(aVoid ->
-                                        Toast.makeText(
-                                                getContext(),
-                                                "ההתראה נמחקה",
-                                                Toast.LENGTH_SHORT
-                                        ).show()
-                                );
+                // Delete from Firestore
+                db.collection("users")
+                        .document(currentUserId)
+                        .collection("notifications")
+                        .document(item.getId())
+                        .delete()
+                        .addOnSuccessListener(aVoid -> {
+                            if (getContext() != null) {
+                                Toast.makeText(requireContext(), "ההתראה נמחקה", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+            }
+        };
 
-                        // ---- Remove from UI immediately ----
-                        notificationList.remove(position);
-                        adapter.notifyItemRemoved(position);
-                        updateEmptyState();
-                    }
-                };
-
-        new ItemTouchHelper(swipeCallback)
-                .attachToRecyclerView(recyclerView);
+        new ItemTouchHelper(swipeCallback).attachToRecyclerView(recyclerView);
     }
 
     /**
-     * Deletes all notifications using a Firestore batch operation.
+     * Deletes all notifications using a WriteBatch.
      */
     private void clearAllNotifications() {
-
         if (notificationList.isEmpty()) return;
 
         WriteBatch batch = db.batch();
 
         for (NotificationItem item : notificationList) {
-            batch.delete(
-                    db.collection("users")
-                            .document(currentUserId)
-                            .collection("notifications")
-                            .document(item.getId())
-            );
+            batch.delete(db.collection("users")
+                    .document(currentUserId)
+                    .collection("notifications")
+                    .document(item.getId()));
         }
 
         batch.commit()
-                .addOnSuccessListener(aVoid ->
-                        Toast.makeText(
-                                getContext(),
-                                "כל ההתראות נמחקו",
-                                Toast.LENGTH_SHORT
-                        ).show()
-                )
-                .addOnFailureListener(e ->
-                        Toast.makeText(
-                                getContext(),
-                                "שגיאה במחיקה",
-                                Toast.LENGTH_SHORT
-                        ).show()
-                );
+                .addOnSuccessListener(aVoid -> {
+                    if (!isAdded()) return;
+                    Toast.makeText(requireContext(), "כל ההתראות נמחקו", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    if (!isAdded()) return;
+                    Toast.makeText(requireContext(), "שגיאה במחיקה", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    /**
+     * Cleanup listener when view is destroyed to prevent memory leaks.
+     */
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (firestoreListener != null) {
+            firestoreListener.remove();
+            firestoreListener = null;
+        }
     }
 }

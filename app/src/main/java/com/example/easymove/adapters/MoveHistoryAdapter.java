@@ -6,46 +6,63 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
+
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.example.easymove.R;
 import com.example.easymove.model.MoveRequest;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
-
+/**
+ * Adapter responsible for displaying the user's move history.
+ * Handles the display of move details (date, status, addresses, mover name)
+ * and manages the visibility of the "Add Review" button based on the move status.
+ */
 public class MoveHistoryAdapter extends RecyclerView.Adapter<MoveHistoryAdapter.ViewHolder> {
 
-
+    // Optimization: Define formatter and colors once to avoid recreation during binding.
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+    private static final int COLOR_COMPLETED = Color.parseColor("#4CAF50"); // Green
+    private static final int COLOR_CANCELED = Color.parseColor("#F44336"); // Red
+    private static final int COLOR_CONFIRMED = Color.parseColor("#2196F3"); // Blue
+    private static final int COLOR_DEFAULT = Color.GRAY;
 
     private List<MoveRequest> moves = new ArrayList<>();
     private OnAddReviewClickListener listener;
 
+    /**
+     * Interface for handling clicks on the "Add Review" button.
+     */
     public interface OnAddReviewClickListener {
         void onAddReviewClicked(MoveRequest move);
     }
 
-
-
-
-
-
+    /**
+     * Updates the list of moves and refreshes the UI.
+     *
+     * @param moves The new list of move requests.
+     */
     public void setMoves(List<MoveRequest> moves) {
-        this.moves = moves;
+        this.moves = Objects.requireNonNullElseGet(moves, ArrayList::new);
         notifyDataSetChanged();
     }
+
     public void setOnAddReviewClickListener(OnAddReviewClickListener listener) {
         this.listener = listener;
     }
 
-
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_move_history, parent, false);
+        View view = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_move_history, parent, false);
         return new ViewHolder(view);
     }
 
@@ -53,69 +70,61 @@ public class MoveHistoryAdapter extends RecyclerView.Adapter<MoveHistoryAdapter.
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         MoveRequest move = moves.get(position);
 
+        // Bind Addresses
         holder.tvSource.setText(move.getSourceAddress());
         holder.tvDest.setText(move.getDestAddress());
 
+        // Bind Mover Name
         String moverName = move.getMoverName();
-
         if (moverName != null && !moverName.trim().isEmpty()) {
             holder.tvMoverName.setText("מוביל: " + moverName);
         } else {
             holder.tvMoverName.setText("מוביל: טוען...");
         }
 
-
-
-
-        // טיפול בתאריך (שיפור קטן בטקסט ברירת המחדל)
+        // Bind Date
         if (move.getMoveDate() > 0) {
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-            holder.tvDate.setText(sdf.format(new Date(move.getMoveDate())));
+            holder.tvDate.setText(DATE_FORMAT.format(new Date(move.getMoveDate())));
         } else {
             holder.tvDate.setText("תאריך לא צוין");
         }
 
-        // --- התיקון החכם מהקוד השני ---
-        // נרמול הסטטוס (אותיות גדולות ומניעת קריסה אם ריק)
+        // Handle Status Logic
         String status = (move.getStatus() != null) ? move.getStatus().toUpperCase() : "";
+        boolean isReviewable = false;
 
         switch (status) {
             case "COMPLETED":
                 holder.tvStatus.setText("הושלם ✅");
-                holder.tvStatus.setTextColor(Color.parseColor("#4CAF50")); // ירוק
-                holder.btnAddReview.setVisibility(View.VISIBLE);
-                holder.btnAddReview.setOnClickListener(v -> {
-                    if (listener != null) {
-                        listener.onAddReviewClicked(move);
-                    }
-                });
-
+                holder.tvStatus.setTextColor(COLOR_COMPLETED);
+                isReviewable = true; // Only completed moves can be reviewed
                 break;
 
             case "CANCELED":
                 holder.tvStatus.setText("בוטל ❌");
-                holder.tvStatus.setTextColor(Color.parseColor("#F44336")); // אדום
-                holder.btnAddReview.setVisibility(View.GONE);
-                holder.btnAddReview.setOnClickListener(null);
-
+                holder.tvStatus.setTextColor(COLOR_CANCELED);
                 break;
 
             case "CONFIRMED":
-                // הוספתי את זה ליתר ביטחון, שיהיה יפה אם יקרה
                 holder.tvStatus.setText("אושר");
-                holder.tvStatus.setTextColor(Color.parseColor("#2196F3")); // כחול
-                holder.btnAddReview.setVisibility(View.GONE);
-                holder.btnAddReview.setOnClickListener(null);
-
+                holder.tvStatus.setTextColor(COLOR_CONFIRMED);
                 break;
 
             default:
-                holder.tvStatus.setText(status); // מציג את הסטטוס המקורי אם לא זיהינו
-                holder.tvStatus.setTextColor(Color.GRAY);
-                holder.btnAddReview.setVisibility(View.GONE);
-                holder.btnAddReview.setOnClickListener(null);
-
+                holder.tvStatus.setText(status);
+                holder.tvStatus.setTextColor(COLOR_DEFAULT);
                 break;
+        }
+
+        // Toggle "Add Review" button visibility
+        if (isReviewable) {
+            holder.btnAddReview.setVisibility(View.VISIBLE);
+            holder.btnAddReview.setOnClickListener(v -> {
+                if (listener != null) listener.onAddReviewClicked(move);
+            });
+        } else {
+            holder.btnAddReview.setVisibility(View.GONE);
+            holder.btnAddReview.setOnClickListener(null);
         }
     }
 
@@ -124,9 +133,12 @@ public class MoveHistoryAdapter extends RecyclerView.Adapter<MoveHistoryAdapter.
         return moves.size();
     }
 
+    /**
+     * ViewHolder class to cache view references.
+     */
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvDate, tvStatus, tvSource, tvDest, tvMoverName;
-        Button btnAddReview;
+        final TextView tvDate, tvStatus, tvSource, tvDest, tvMoverName;
+        final Button btnAddReview;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -136,8 +148,6 @@ public class MoveHistoryAdapter extends RecyclerView.Adapter<MoveHistoryAdapter.
             tvDest = itemView.findViewById(R.id.tvDest);
             tvMoverName = itemView.findViewById(R.id.tvMoverName);
             btnAddReview = itemView.findViewById(R.id.btnAddReview);
-
-
         }
     }
 }

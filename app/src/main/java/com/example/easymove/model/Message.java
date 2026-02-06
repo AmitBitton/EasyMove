@@ -1,35 +1,72 @@
-package com.example.easymove.model; // מודלים
+package com.example.easymove.model;
 
-import com.google.firebase.Timestamp; // זמן של Firebase
+import com.google.firebase.Timestamp;
 
+/**
+ * Model class representing a single chat message within a conversation.
+ * Stored in Firestore under: chats/{chatId}/messages/{messageId}
+ */
 public class Message {
-    // מודל הודעה שנשמר במסד ב: chats/{chatId}/messages
 
-    private String senderId; // מי שלח (UID)
-    private String senderName; // שם השולח (להצגה במסך)
-    private String text; // תוכן ההודעה
-    private Timestamp timestamp; // מתי נשלחה ההודעה
+    private String senderId;   // UID of the user who sent the message
+    private String senderName; // Display name of the sender
+    private String text;       // The content of the message
+    private Timestamp timestamp; // Server timestamp of when the message was sent
 
-    public Message() { } // חובה לפיירבייס (בנאי ריק)
-
-    public Message(String senderId, String senderName, String text, Timestamp timestamp) {
-        // בנאי מלא ליצירת הודעה חדשה לפני שמירה למסד
-        this.senderId = senderId; // שמירת UID שולח
-        this.senderName = senderName; // שמירת שם שולח
-        this.text = text; // שמירת תוכן
-        this.timestamp = timestamp; // שמירת זמן שליחה
+    /**
+     * Default constructor required for Firestore serialization/deserialization.
+     */
+    public Message() {
     }
 
-    // Getters & Setters
-    public String getSenderId() { return senderId; } // מחזיר UID שולח
-    public void setSenderId(String senderId) { this.senderId = senderId; } // מעדכן UID שולח
+    /**
+     * Constructor for creating a new message.
+     *
+     * @param senderId   The UID of the sender.
+     * @param senderName The display name of the sender.
+     * @param text       The message content.
+     * @param timestamp  The time the message was created.
+     */
+    public Message(String senderId, String senderName, String text, Timestamp timestamp) {
+        this.senderId = senderId;
+        this.senderName = senderName;
+        this.text = text;
+        this.timestamp = timestamp;
+    }
 
-    public String getSenderName() { return senderName; } // מחזיר שם שולח
-    public void setSenderName(String senderName) { this.senderName = senderName; } // מעדכן שם שולח
+    // ------------------------------------------------------------------------
+    // Getters and Setters
+    // ------------------------------------------------------------------------
 
-    public String getText() { return text; } // מחזיר טקסט
-    public void setText(String text) { this.text = text; } // מעדכן טקסט
+    public String getSenderId() {
+        return senderId;
+    }
 
-    public Timestamp getTimestamp() { return timestamp; } // מחזיר timestamp
-    public void setTimestamp(Timestamp timestamp) { this.timestamp = timestamp; } // מעדכן timestamp
+    public void setSenderId(String senderId) {
+        this.senderId = senderId;
+    }
+
+    public String getSenderName() {
+        return senderName;
+    }
+
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
+    }
+
+    public Timestamp getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(Timestamp timestamp) {
+        this.timestamp = timestamp;
+    }
 }

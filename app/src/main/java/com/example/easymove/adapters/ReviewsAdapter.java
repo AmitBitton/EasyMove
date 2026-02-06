@@ -14,20 +14,33 @@ import com.example.easymove.model.Review;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Adapter responsible for displaying user reviews.
+ * Handles the display of the reviewer's name, the review text, and converts
+ * numeric ratings into a visual star representation (⭐⭐⭐⭐⭐).
+ */
 public class ReviewsAdapter extends RecyclerView.Adapter<ReviewsAdapter.ViewHolder> {
 
     private final List<Review> reviews = new ArrayList<>();
 
+    /**
+     * Updates the list of reviews and refreshes the UI.
+     *
+     * @param list The new list of reviews.
+     */
     public void setReviews(List<Review> list) {
         reviews.clear();
-        if (list != null) reviews.addAll(list);
+        if (list != null) {
+            reviews.addAll(list);
+        }
         notifyDataSetChanged();
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_review, parent, false);
+        View v = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.item_review, parent, false);
         return new ViewHolder(v);
     }
 
@@ -35,9 +48,14 @@ public class ReviewsAdapter extends RecyclerView.Adapter<ReviewsAdapter.ViewHold
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Review r = reviews.get(position);
 
+        // Bind Name (Default to "User" if null)
         holder.tvReviewerName.setText(r.getReviewerName() != null ? r.getReviewerName() : "משתמש");
-        holder.tvStars.setText(starsText(r.getStars()));
+
+        // Bind Review Text
         holder.tvReviewText.setText(r.getText() != null ? r.getText() : "");
+
+        // Bind Stars (Convert int to Emoji string)
+        holder.tvStars.setText(getStarRatingString(r.getStars()));
     }
 
     @Override
@@ -45,16 +63,31 @@ public class ReviewsAdapter extends RecyclerView.Adapter<ReviewsAdapter.ViewHold
         return reviews.size();
     }
 
-    private String starsText(int stars) {
+    /**
+     * Helper method to convert a numeric integer (1-5) into a string of star emojis.
+     *
+     * @param stars The number of stars.
+     * @return A string containing the corresponding number of "⭐".
+     */
+    private String getStarRatingString(int stars) {
+        // Clamp value between 1 and 5
         if (stars < 1) stars = 1;
         if (stars > 5) stars = 5;
+
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < stars; i++) sb.append("⭐");
+        for (int i = 0; i < stars; i++) {
+            sb.append("⭐");
+        }
         return sb.toString();
     }
 
+    /**
+     * ViewHolder class to cache view references.
+     */
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvReviewerName, tvStars, tvReviewText;
+        final TextView tvReviewerName;
+        final TextView tvStars;
+        final TextView tvReviewText;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);

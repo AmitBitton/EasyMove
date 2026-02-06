@@ -1,89 +1,103 @@
-package com.example.easymove.view.fragments; // Fragments
+package com.example.easymove.view.fragments;
 
-import android.content.Intent; // מעבר למסך אחר
-import android.os.Bundle; // נתונים
-import android.view.LayoutInflater; // inflate
-import android.view.View; // view
-import android.view.ViewGroup; // container
-import android.widget.ProgressBar; // טעינה
-import android.widget.TextView; // טקסט
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
-import androidx.annotation.NonNull; // לא null
-import androidx.annotation.Nullable; // יכול להיות null
-import androidx.fragment.app.Fragment; // Fragment
-import androidx.lifecycle.ViewModelProvider; // ViewModelProvider
-import androidx.recyclerview.widget.LinearLayoutManager; // סידור רשימה
-import androidx.recyclerview.widget.RecyclerView; // RecyclerView
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.easymove.R; // משאבים
-import com.example.easymove.adapters.ChatsListAdapter; // אדפטר רשימת צ'אטים
-import com.example.easymove.view.activities.ChatActivity; // מסך צ'אט
-import com.example.easymove.viewmodel.ChatViewModel; // ViewModel של צ'אטים
+import com.example.easymove.R;
+import com.example.easymove.adapters.ChatsListAdapter;
+import com.example.easymove.view.activities.ChatActivity;
+import com.example.easymove.viewmodel.ChatViewModel;
 
-import java.util.ArrayList; // רשימה ריקה כשאין צ'אטים
+import java.util.ArrayList;
 
+/**
+ * Fragment responsible for displaying the list of active chats for the current user.
+ * It handles:
+ * 1. Fetching the user's chat history.
+ * 2. Displaying chats in a RecyclerView.
+ * 3. Handling navigation to a specific chat room {@link ChatActivity}.
+ * 4. Refreshing the list when returning from a conversation.
+ */
 public class ChatsFragment extends Fragment {
 
-    private ChatViewModel chatViewModel; // מנהל נתונים ולוגיקה למסך צ'אטים
-    private ChatsListAdapter adapter; // אדפטר לרשימה
-    private TextView tvEmpty; // טקסט "אין צ'אטים"
-    private ProgressBar progressBar; // ספינר טעינה
+    private ChatViewModel chatViewModel;
+    private ChatsListAdapter adapter;
+    private TextView tvEmpty;
+    private ProgressBar progressBar;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        // מנפחת את layout של המסך
         return inflater.inflate(R.layout.fragment_chats, container, false);
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        // נקרא אחרי שיש view, כאן מחברים UI, אדפטרים, observers
         super.onViewCreated(view, savedInstanceState);
 
+        // 1. Initialize ViewModel
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
-        // יצירת/קבלת ViewModel למסך זה
 
-        RecyclerView recyclerView = view.findViewById(R.id.recyclerChatsList); // רשימת צ'אטים
-        tvEmpty = view.findViewById(R.id.tvEmptyChats); // טקסט כשאין צ'אטים
-        progressBar = view.findViewById(R.id.progressChats); // טעינה
+        // 2. Initialize UI Components
+        RecyclerView recyclerView = view.findViewById(R.id.recyclerChatsList);
+        tvEmpty = view.findViewById(R.id.tvEmptyChats);
+        progressBar = view.findViewById(R.id.progressChats);
 
-        recyclerView.setLayoutManager(new LinearLayoutManager(getContext())); // רשימה אנכית
+        // 3. Setup RecyclerView
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        // לחיצה על צ'אט ברשימה פותחת את מסך ההודעות
+        // Setup Adapter with Click Listener
         adapter = new ChatsListAdapter(chat -> {
-            Intent intent = new Intent(getContext(), ChatActivity.class); // מעבר למסך שיחה
-            intent.putExtra("CHAT_ID", chat.getId()); // שולחים את מזהה הצ'אט כדי לטעון הודעות
-            startActivity(intent); // פתיחת activity
+            Intent intent = new Intent(requireContext(), ChatActivity.class);
+            intent.putExtra("CHAT_ID", chat.getId()); // Pass Chat ID to load messages
+            startActivity(intent);
         });
-        recyclerView.setAdapter(adapter); // חיבור אדפטר
+        recyclerView.setAdapter(adapter);
 
-        // האזנה לשינויים ברשימה
+        // 4. Observe Data Changes
+        observeViewModel();
+
+        // 5. Initial Data Load
+        chatViewModel.loadUserChats();
+    }
+
+    private void observeViewModel() {
+        // Observe Chat List
         chatViewModel.getUserChatsLiveData().observe(getViewLifecycleOwner(), chats -> {
-            // observer שמופעל כש-ViewModel מעדכן את רשימת הצ'אטים
             if (chats == null || chats.isEmpty()) {
-                adapter.setChats(new ArrayList<>()); // מציגים רשימה ריקה
-                tvEmpty.setVisibility(View.VISIBLE); // מציגים "אין צ'אטים"
+                // Show "Empty State"
+                adapter.setChats(new ArrayList<>());
+                tvEmpty.setVisibility(View.VISIBLE);
             } else {
-                tvEmpty.setVisibility(View.GONE); // מסתירים "אין צ'אטים"
-                adapter.setChats(chats); // מעבירים רשימה לאדפטר
+                // Show List
+                tvEmpty.setVisibility(View.GONE);
+                adapter.setChats(chats);
             }
         });
 
+        // Observe Loading State
         chatViewModel.getIsLoading().observe(getViewLifecycleOwner(), isLoading ->
                 progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE)
         );
-        // אם isLoading = true -> מציגים progressBar, אחרת מסתירים
-
-        // טעינת הנתונים
-        chatViewModel.loadUserChats(); // קריאה שמביאה מהמסד את כל הצ'אטים של המשתמשת
     }
 
     @Override
     public void onResume() {
-        // נקרא בכל פעם שחוזרים למסך הזה (כולל אחרי שחוזרים מ-ChatActivity)
         super.onResume();
-        // רענון הרשימה כשחוזרים ממסך השיחה (כדי לעדכן את "ההודעה האחרונה")
-        chatViewModel.loadUserChats(); // מביא מחדש כדי שה-lastMessage יהיה מעודכן
+        // Refresh the list when returning from the Chat Activity.
+        // This ensures the "Last Message" and timestamps are up-to-date.
+        chatViewModel.loadUserChats();
     }
 }

@@ -1,67 +1,89 @@
 package com.example.easymove.model;
 
+import com.google.firebase.firestore.Exclude;
+import java.io.Serializable;
 import java.util.List;
 
 /**
- * UserProfile
- * מייצג משתמש (לקוח או מוביל).
- * משמש כמקור האמת (Source of Truth) לכתובות ברירת מחדל ולתאריך מועדף.
+ * Model class representing a user in the system.
+ * This class serves as a unified profile for both "Customer" and "Mover" roles.
+ * It acts as the Source of Truth for default addresses, contact info, and preferences.
  */
-public class UserProfile {
+public class UserProfile implements Serializable {
 
-    /* -----------------------  פרטים אישיים  ----------------------- */
+    // ------------------------------------------------------------------------
+    // Personal Information (Common)
+    // ------------------------------------------------------------------------
     private String userId;
     private String name;
     private String phone;
     private String userType;          // "customer" or "mover"
     private String profileImageUrl;
+    private String email;
 
-    /* -----------------------  שדות ללקוח (Customer)  ----------------------- */
-    // כתובות טקסטואליות (מה שהמשתמש רואה)
+    // ------------------------------------------------------------------------
+    // Customer Specific Fields
+    // ------------------------------------------------------------------------
+
+    // Textual addresses (What the user sees)
     private String defaultFromAddress;
     private String defaultToAddress;
 
-    // קואורדינטות לכתובות הלקוח (לחישוב מרחקים עתידי)
+    // Coordinates for addresses (Used for distance calculations)
     private Double fromLat;
     private Double fromLng;
     private Double toLat;
     private Double toLng;
 
-    // פרטי דירה
+    // Apartment specific details
     private Integer floor;
     private Integer apartment;
 
-    // ✅ התאריך הקובע! סנכרון מול ההובלה הפעילה
+    // The preferred move date (Synced with the active move request)
     private Long defaultMoveDate;
 
-    /* -----------------------  שדות למוביל (Mover)  ----------------------- */
-    // מיקום בסיס של המוביל (לחיפוש גיאוגרפי)
+    // ------------------------------------------------------------------------
+    // Mover Specific Fields
+    // ------------------------------------------------------------------------
+
+    // Base location for geographical search (GeoHash + Lat/Lng)
     private String geohash;
     private double lat;
     private double lng;
 
-    // רדיוס שירות
+    // Operational radius in Kilometers
     private int serviceRadiusKm = 30;
 
-    // אזורי שירות (טקסט)
+    // List of service area names (e.g., "Tel Aviv", "Haifa")
     private List<String> serviceAreas;
 
-    // אודות ודירוג
+    // Business details
     private String about;
     private float rating;
     private int ratingCount;
 
-    // טוקן להתראות
+    // ------------------------------------------------------------------------
+    // System & Metadata
+    // ------------------------------------------------------------------------
+
+    // FCM Token for Push Notifications
     private String fcmToken;
 
-    // שדה עזר (לא נשמר במסד, מחושב בזמן ריצה למיון)
+    // Runtime helper field for sorting results by distance.
+    // Not stored in the database.
     private double distanceFromUser;
 
-    /* -----------------------  Constructors  ----------------------- */
+    /**
+     * Default constructor required for Firestore serialization.
+     */
+    public UserProfile() {
+    }
 
-    public UserProfile() { } // חובה לפיירבייס
+    // ------------------------------------------------------------------------
+    // Getters and Setters
+    // ------------------------------------------------------------------------
 
-    /* -----------------------  Getters & Setters  ----------------------- */
+    // --- Personal Info ---
 
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
@@ -69,8 +91,6 @@ public class UserProfile {
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
-    public String getFcmToken() { return fcmToken; }
-    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
 
@@ -80,7 +100,8 @@ public class UserProfile {
     public String getProfileImageUrl() { return profileImageUrl; }
     public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
 
-    // --- לקוח ---
+    // --- Customer Fields ---
+
     public String getDefaultFromAddress() { return defaultFromAddress; }
     public void setDefaultFromAddress(String defaultFromAddress) { this.defaultFromAddress = defaultFromAddress; }
 
@@ -108,7 +129,8 @@ public class UserProfile {
     public Long getDefaultMoveDate() { return defaultMoveDate; }
     public void setDefaultMoveDate(Long defaultMoveDate) { this.defaultMoveDate = defaultMoveDate; }
 
-    // --- מוביל ---
+    // --- Mover Fields ---
+
     public String getGeohash() { return geohash; }
     public void setGeohash(String geohash) { this.geohash = geohash; }
 
@@ -133,6 +155,26 @@ public class UserProfile {
     public int getRatingCount() { return ratingCount; }
     public void setRatingCount(int ratingCount) { this.ratingCount = ratingCount; }
 
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    // --- System Fields ---
+
+    public String getFcmToken() { return fcmToken; }
+    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
+
+    /**
+     * @return The calculated distance from the searching user.
+     * Annotated with @Exclude so it is NOT saved to Firestore.
+     */
+    @Exclude
     public double getDistanceFromUser() { return distanceFromUser; }
+
+    @Exclude
     public void setDistanceFromUser(double distanceFromUser) { this.distanceFromUser = distanceFromUser; }
 }
