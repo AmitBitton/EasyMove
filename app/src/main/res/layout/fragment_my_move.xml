@@ -3,27 +3,31 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5"
+    android:background="#F7F8FA"
     android:layoutDirection="rtl">
 
-    <TextView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/textNoMove"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="טוען נתונים..."
         android:visibility="gone"
+        android:textColor="#111827"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
 
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardMoveDetails"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_margin="16dp"
         app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="#FFFFFF"
+        app:strokeWidth="1dp"
+        app:strokeColor="#EEF1F4"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -39,85 +43,85 @@
                 android:orientation="vertical"
                 android:padding="24dp">
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/textTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="24dp"
                     android:text="פרטי הובלה"
-                    android:textColor="@android:color/black"
+                    android:textColor="#111827"
                     android:textSize="28sp"
                     android:textStyle="bold"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/tvPartnerInfo"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="✅ הובלה משותפת"
-                    android:textColor="#388E3C"
+                    android:textColor="#166534"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:background="#E8F5E9"
+                    android:background="#DCFCE7"
                     android:padding="12dp"
                     android:visibility="gone"
                     android:layout_marginBottom="16dp"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="מוצא:"
-                    android:textColor="#757575"/>
+                    android:textColor="#374151"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/textFrom"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:text="-"
-                    android:textColor="@android:color/black"
+                    android:textColor="#111827"
                     android:textSize="20sp"
                     android:textStyle="bold"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/tvIntermediateAddress"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:text="+ איסוף נוסף מ: ..."
-                    android:textColor="#2E7D32"
+                    android:textColor="#166534"
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:visibility="gone"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="יעד:"
-                    android:textColor="#757575"/>
+                    android:textColor="#374151"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/textTo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:text="-"
-                    android:textColor="@android:color/black"
+                    android:textColor="#111827"
                     android:textSize="20sp"
                     android:textStyle="bold"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="תאריך:"
-                    android:textColor="#757575"/>
+                    android:textColor="#374151"/>
 
-                <TextView
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/textDate"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="32dp"
                     android:text="-"
-                    android:textColor="@android:color/black"
+                    android:textColor="#111827"
                     android:textSize="20sp"
                     android:textStyle="bold"/>
 
@@ -127,42 +131,58 @@
                     android:layout_height="60dp"
                     android:layout_marginBottom="12dp"
                     android:text="צ'אט עם המוביל"
-                    android:visibility="gone"/>
+                    android:visibility="gone"
+                    android:backgroundTint="#1F4B99"
+                    android:textColor="#FFFFFF"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"/>
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnViewItems"
                     android:layout_width="match_parent"
                     android:layout_height="60dp"
                     android:layout_marginBottom="12dp"
-                    android:text="צפה ברשומות"/>
+                    android:text="צפה ברשומות"
+                    android:backgroundTint="#2F6F6A"
+                    android:textColor="#FFFFFF"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"/>
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnAddPartner"
                     android:layout_width="match_parent"
                     android:layout_height="60dp"
                     android:layout_marginBottom="12dp"
-                    android:text="הוסף שותף להובלה"/>
+                    android:text="הוסף שותף להובלה"
+                    android:backgroundTint="#1F4B99"
+                    android:textColor="#FFFFFF"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCancelMove"
                     android:layout_width="match_parent"
                     android:layout_height="60dp"
                     android:text="ביטול"
-                    android:backgroundTint="#D32F2F"/>
+                    android:backgroundTint="#D92D20"
+                    android:textColor="#FFFFFF"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"/>
 
             </LinearLayout>
         </ScrollView>
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
 
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardIncomingRequest"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:visibility="gone"
-        app:cardBackgroundColor="#E3F2FD"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="20dp"
+        app:cardBackgroundColor="#EEF1F4"
+        app:cardElevation="2dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="#EEF1F4"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
@@ -173,14 +193,15 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <TextView
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tvRequestDetails"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="בקשה חדשה"
                 android:textSize="16sp"
                 android:layout_marginBottom="12dp"
-                android:layout_gravity="end"/>
+                android:layout_gravity="end"
+                android:textColor="#111827"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -188,24 +209,27 @@
                 android:orientation="horizontal"
                 android:weightSum="2">
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnRejectReq"
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
                     android:text="דחה"
-                    android:backgroundTint="@color/blue_primary"
-                    android:textColor="@android:color/white"
-                    android:layout_marginEnd="8dp"/> <Button
+                    android:backgroundTint="#D92D20"
+                    android:textColor="#FFFFFF"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"/> <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnApproveReq"
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"
                 android:text="אשר"
-                android:backgroundTint="@color/blue_primary"
-                android:textColor="@android:color/white"
-                android:layout_marginStart="8dp"/> </LinearLayout>
+                android:backgroundTint="#1F4B99"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/> </LinearLayout>
         </LinearLayout>
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
+

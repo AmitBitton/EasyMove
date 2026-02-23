@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
@@ -75,14 +76,16 @@
                 android:layout_marginStart="24dp"/>
         </LinearLayout>
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddImage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="הוסף תמונה"
             android:drawableEnd="@android:drawable/ic_menu_camera"
             android:backgroundTint="#FF9800"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="8dp"
+            android:textAllCaps="false"
+            app:cornerRadius="12dp"/>
 
         <ImageView
             android:id="@+id/imagePreview"
@@ -98,20 +101,24 @@
             android:orientation="horizontal"
             android:gravity="center">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCancel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="ביטול"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_marginEnd="16dp"/>
+                android:layout_marginEnd="16dp"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSaveItem"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="שמור פריט"
-                android:backgroundTint="#4CAF50"/>
+                android:backgroundTint="#4CAF50"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
         </LinearLayout>
 
     </LinearLayout>

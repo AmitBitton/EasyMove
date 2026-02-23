@@ -3,6 +3,8 @@ package com.example.easymove.view.fragments;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.Intent;
+import android.location.Address;
+import android.location.Geocoder;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -34,10 +36,12 @@ import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
 import com.google.firebase.auth.FirebaseAuth;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Fragment responsible for searching for Movers based on location (GeoFire).
@@ -254,6 +258,33 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         }
     }
 
+    private interface LatLngResultCallback {
+        void onResult(@Nullable LatLng latLng);
+    }
+
+    private boolean isInvalidCoordinate(@Nullable Double lat, @Nullable Double lng) {
+        return lat == null || lng == null || lat == 0.0 || lng == 0.0;
+    }
+
+    private void geocodeAddress(String address, LatLngResultCallback callback) {
+        new Thread(() -> {
+            LatLng result = null;
+            try {
+                Geocoder geocoder = new Geocoder(requireContext(), Locale.getDefault());
+                List<Address> matches = geocoder.getFromLocationName(address, 1);
+                if (matches != null && !matches.isEmpty()) {
+                    Address match = matches.get(0);
+                    result = new LatLng(match.getLatitude(), match.getLongitude());
+                }
+            } catch (IOException e) {
+                // Best-effort fallback; we'll report failure on the UI thread.
+            }
+
+            LatLng finalResult = result;
+            requireActivity().runOnUiThread(() -> callback.onResult(finalResult));
+        }).start();
+    }
+
     /**
      * Populates fields from the user's saved profile (if available).
      */
@@ -279,13 +310,49 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         Double tlt = myProfile.getToLat();
         Double tln = myProfile.getToLng();
 
-        if (flt == null || fln == null || tlt == null || tln == null) {
-            Toast.makeText(getContext(), "חסרים קואורדינטות לכתובות. בחרי כתובות מחדש באזור האישי.", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        boolean needsFrom = isInvalidCoordinate(flt, fln);
+        boolean needsTo = isInvalidCoordinate(tlt, tln);
 
-        sourceLatLng = new LatLng(flt, fln);
-        destLatLng = new LatLng(tlt, tln);
+        if (needsFrom || needsTo) {
+            geocodeAddress(from, fromLatLng -> {
+                if (fromLatLng == null) {
+                    Toast.makeText(getContext(), "לא ניתן לאתר את כתובת המוצא. נא לבחור מחדש", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if (needsFrom) {
+                    sourceLatLng = fromLatLng;
+                    myProfile.setFromLat(fromLatLng.latitude);
+                    myProfile.setFromLng(fromLatLng.longitude);
+                } else {
+                    sourceLatLng = new LatLng(flt, fln);
+                }
+
+                geocodeAddress(to, toLatLng -> {
+                    if (toLatLng == null) {
+                        Toast.makeText(getContext(), "לא ניתן לאתר את כתובת היעד. נא לבחור מחדש", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    if (needsTo) {
+                        destLatLng = toLatLng;
+                        myProfile.setToLat(toLatLng.latitude);
+                        myProfile.setToLng(toLatLng.longitude);
+                    } else {
+                        destLatLng = new LatLng(tlt, tln);
+                    }
+
+                    userViewModel.saveMyProfile(myProfile);
+                    btnSearch.setEnabled(true);
+                    Toast.makeText(getContext(), "הפרטים מולאו מהאזור האישי", Toast.LENGTH_SHORT).show();
+                });
+            });
+        } else {
+            sourceLatLng = new LatLng(flt, fln);
+            destLatLng = new LatLng(tlt, tln);
+            btnSearch.setEnabled(true);
+            Toast.makeText(getContext(), "הפרטים מולאו מהאזור האישי", Toast.LENGTH_SHORT).show();
+        }
 
         Long date = myProfile.getDefaultMoveDate();
         if (date != null && date > 0) {
@@ -298,11 +365,8 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
             btnSelectDate.setText(day + "/" + month + "/" + year);
         } else {
             selectedDate = 0;
-            btnSelectDate.setText("📅 בחר תאריך הובלה");
+            btnSelectDate.setText("בחר תאריך הובלה 📅");
         }
-
-        btnSearch.setEnabled(true);
-        Toast.makeText(getContext(), "הפרטים מולאו מהאזור האישי", Toast.LENGTH_SHORT).show();
     }
 
     // ------------------------------------------------------------------------
@@ -363,3 +427,4 @@ public class SearchMoverFragment extends Fragment implements MoversAdapter.OnMov
         Toast.makeText(getContext(), "דיווח על " + mover.getName() + " נשלח לאדמין", Toast.LENGTH_LONG).show();
     }
 }
+

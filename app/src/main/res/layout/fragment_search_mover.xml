@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F5F5F5"
+    android:background="#F7F8FA"
     android:padding="16dp"
     android:layoutDirection="rtl">
 
@@ -12,7 +12,7 @@
         android:text="מצא מוביל"
         android:textSize="24sp"
         android:textStyle="bold"
-        android:textColor="@android:color/black"
+        android:textColor="#111827"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"/>
@@ -22,7 +22,8 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
         app:cardCornerRadius="12dp"
-        app:cardElevation="4dp">
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="#FFFFFF">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -30,27 +31,32 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnFillFromProfile"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=" מלא כתובות מהאזור האישי"
-                android:backgroundTint="#E91E63"
-                android:textColor="@color/white"
-                android:layout_marginBottom="12dp"/>
+                android:backgroundTint="#1F4B99"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="12dp"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
 
             <TextView
                 android:text="מאיפה?"
                 android:textStyle="bold"
                 android:layout_marginBottom="4dp"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                android:textColor="#374151"/>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSourceAddress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:visibility="gone"/>
+                android:visibility="gone"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
 
             <TextView
                 android:id="@+id/tvSourceResult"
@@ -58,9 +64,9 @@
                 android:layout_height="wrap_content"
                 android:text="לחץ לבחירת כתובת מוצא"
                 android:padding="12dp"
-                android:background="#E0E0E0"
+                android:background="#EEF1F4"
                 android:textSize="14sp"
-                android:textColor="#000000"
+                android:textColor="#111827"
                 android:layout_marginBottom="12dp"/>
 
             <TextView
@@ -68,13 +74,16 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="4dp"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                android:textColor="#374151"/>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnDestAddress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:visibility="gone"/>
+                android:visibility="gone"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
 
             <TextView
                 android:id="@+id/tvDestResult"
@@ -82,9 +91,9 @@
                 android:layout_height="wrap_content"
                 android:text="לחץ לבחירת כתובת יעד"
                 android:padding="12dp"
-                android:background="#E0E0E0"
+                android:background="#EEF1F4"
                 android:textSize="14sp"
-                android:textColor="#000000"
+                android:textColor="#111827"
                 android:layout_marginBottom="12dp"/>
 
             <TextView
@@ -92,26 +101,32 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="4dp"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                android:textColor="#374151"/>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSelectDate"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📅 בחר תאריך הובלה"
-                android:backgroundTint="#FF9800"
-                android:textColor="@color/white"
-                android:layout_marginBottom="16dp"/>
+                android:text="בחר תאריך הובלה 📅"
+                android:backgroundTint="#2F6F6A"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="16dp"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSearchAction"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🔍 חפש מובילים מתאימים"
-                android:backgroundTint="#4CAF50"
+                android:text="חפש מובילים מתאימים 🔍"
+                android:backgroundTint="#60A5FA"
+                android:textColor="#FFFFFF"
                 android:padding="12dp"
                 android:textSize="16sp"
-                android:enabled="false"/>
+                android:enabled="false"
+                android:textAllCaps="false"
+                app:cornerRadius="12dp"/>
 
         </LinearLayout>
     </androidx.cardview.widget.CardView>

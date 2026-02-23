@@ -115,12 +115,14 @@
                 android:layout_weight="1"
                 android:layout_marginEnd="8dp">
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnDetails"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="פרטים מלאים"/>
+                    android:text="פרטים מלאים"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp" />
 
                 <View
                     android:id="@+id/viewNotificationBadge"
@@ -136,13 +138,16 @@
 
             </FrameLayout>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnOpenChat"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:backgroundTint="#2196F3"
                 android:text="פתח צ'אט"
-                android:backgroundTint="#2196F3"/>
+                android:textAllCaps="false"
+                app:cornerRadius="12dp" />
+
         </LinearLayout>
 
     </LinearLayout>
