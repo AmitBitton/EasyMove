@@ -77,7 +77,7 @@ Cloud Functions are located in `functions/` and handle notifications for:
 - Move confirmations and cancellations
 
 ## Team 👥
-- Amit Bitton
+- Amit Bitton (Team Lead)
 - David Kitinberg
 - Shira Ben Artzi
 - Alaa Abu Hegly
